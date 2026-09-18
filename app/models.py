@@ -1,0 +1,354 @@
+"""SQLAlchemy models — one class per table in SPEC.md "Data model".
+
+All timestamps are UTC-aware. SQLite drops tzinfo on storage, so `UtcDateTime`
+normalizes to UTC on write and re-attaches UTC on read; on PostgreSQL it is a
+plain `TIMESTAMP WITH TIME ZONE`.
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from typing import Any
+
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    TypeDecorator,
+)
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.db import Base
+
+# --------------------------------------------------------------------------- defaults
+
+DEFAULT_BOOKMAKERS: list[str] = [
+    "pinnacle",
+    "betonlineag",
+    "lowvig",
+    "circasports",
+    "draftkings",
+    "fanduel",
+]
+DEFAULT_BOOK_WEIGHTS: dict[str, float] = {
+    "pinnacle": 3.0,
+    "circasports": 2.0,
+    "betonlineag": 1.5,
+    "lowvig": 1.5,
+    "draftkings": 1.0,
+    "fanduel": 1.0,
+    "espn": 0.5,
+}
+DEFAULT_LEAGUES: list[str] = ["nfl", "nba", "mlb"]
+
+DEFAULT_PREFS: dict[str, Any] = {
+    "bankroll": 1000.0,
+    "kelly_fraction": 0.25,
+    "max_stake_pct": 2.0,
+    "min_edge": 0.02,
+    "taker_fee_rate": 0.05,
+    "devig_method": "power",
+    "bookmakers": list(DEFAULT_BOOKMAKERS),
+    "book_weights": dict(DEFAULT_BOOK_WEIGHTS),
+    "leagues_enabled": list(DEFAULT_LEAGUES),
+    "espn_fallback_enabled": True,
+    "match_window_hours": 36.0,
+    "min_liquidity_usd": 100.0,
+    "stale_book_minutes": 720,
+}
+
+
+def utcnow() -> datetime:
+    return datetime.now(UTC)
+
+
+# --------------------------------------------------------------------------- types
+
+
+class UtcDateTime(TypeDecorator[datetime]):
+    """tz-aware DateTime that survives SQLite round trips as UTC."""
+
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_bind_param(self, value: datetime | None, dialect: Any) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value.astimezone(UTC)
+
+    def process_result_value(self, value: datetime | None, dialect: Any) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value.astimezone(UTC)
+
+
+# --------------------------------------------------------------------------- tables
+
+
+class Game(Base):
+    __tablename__ = "games"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    league: Mapped[str] = mapped_column(String(8), nullable=False, index=True)
+    home_key: Mapped[str | None] = mapped_column(String(8))
+    away_key: Mapped[str | None] = mapped_column(String(8))
+    home_name: Mapped[str | None] = mapped_column(String(80))
+    away_name: Mapped[str | None] = mapped_column(String(80))
+    start_time: Mapped[datetime | None] = mapped_column(UtcDateTime, index=True)
+    pm_event_slug: Mapped[str | None] = mapped_column(String(160), index=True)
+    pm_event_id: Mapped[str | None] = mapped_column(String(40), index=True)
+    book_game_id: Mapped[str | None] = mapped_column(String(80), index=True)
+    espn_event_id: Mapped[str | None] = mapped_column(String(40))
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="scheduled")
+
+    markets: Mapped[list[Market]] = relationship(back_populates="game")
+
+    def __repr__(self) -> str:
+        return (
+            f"<Game id={self.id} {self.league} {self.away_key}@{self.home_key} "
+            f"start={self.start_time} status={self.status}>"
+        )
+
+
+class Market(Base):
+    __tablename__ = "markets"
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)  # Gamma market id
+    game_id: Mapped[int | None] = mapped_column(ForeignKey("games.id"), index=True)
+    market_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    line: Mapped[float | None] = mapped_column(Float)
+    line_team_key: Mapped[str | None] = mapped_column(String(8))
+    question: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    slug: Mapped[str | None] = mapped_column(String(200))
+    condition_id: Mapped[str | None] = mapped_column(String(80))
+    outcome_a_name: Mapped[str] = mapped_column(String(80), nullable=False, default="")
+    outcome_a_key: Mapped[str | None] = mapped_column(String(8))
+    outcome_a_token: Mapped[str] = mapped_column(String(100), nullable=False, default="")
+    outcome_b_name: Mapped[str] = mapped_column(String(80), nullable=False, default="")
+    outcome_b_key: Mapped[str | None] = mapped_column(String(8))
+    outcome_b_token: Mapped[str] = mapped_column(String(100), nullable=False, default="")
+    tick_size: Mapped[float | None] = mapped_column(Float)
+    min_order_size: Mapped[float | None] = mapped_column(Float)
+    accepting_orders: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    closed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    resolved_outcome: Mapped[str | None] = mapped_column(String(1))  # "a" | "b" | None
+    liquidity: Mapped[float | None] = mapped_column(Float)
+    volume: Mapped[float | None] = mapped_column(Float)
+    last_seen_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
+
+    game: Mapped[Game | None] = relationship(back_populates="markets")
+    opportunities: Mapped[list[Opportunity]] = relationship(back_populates="market")
+    bets: Mapped[list[Bet]] = relationship(back_populates="market")
+
+    def __repr__(self) -> str:
+        return (
+            f"<Market id={self.id} {self.market_type} line={self.line} "
+            f"{self.outcome_a_name}/{self.outcome_b_name} closed={self.closed}>"
+        )
+
+
+class Scan(Base):
+    __tablename__ = "scans"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    started_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False, default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
+    kind: Mapped[str] = mapped_column(String(8), nullable=False, default="poly")  # poly|books|both
+    leagues: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    ok: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    credits_used: Mapped[int | None] = mapped_column(Integer)
+    credits_remaining: Mapped[int | None] = mapped_column(Integer)
+    n_markets: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    n_matched: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    n_opps: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    errors: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    notes: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+
+    opportunities: Mapped[list[Opportunity]] = relationship(back_populates="scan")
+
+    def __repr__(self) -> str:
+        return (
+            f"<Scan id={self.id} kind={self.kind} ok={self.ok} markets={self.n_markets} "
+            f"matched={self.n_matched} opps={self.n_opps}>"
+        )
+
+
+class PmQuote(Base):
+    __tablename__ = "pm_quotes"
+    __table_args__ = (Index("ix_pm_quotes_scan_market", "scan_id", "market_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    scan_id: Mapped[int] = mapped_column(ForeignKey("scans.id"), nullable=False)
+    market_id: Mapped[str] = mapped_column(ForeignKey("markets.id"), nullable=False)
+    token: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    best_bid: Mapped[float | None] = mapped_column(Float)
+    best_ask: Mapped[float | None] = mapped_column(Float)
+    mid: Mapped[float | None] = mapped_column(Float)
+    ask_depth_json: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    bid_depth_json: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    fetched_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False, default=utcnow)
+
+    market: Mapped[Market] = relationship()
+
+    def __repr__(self) -> str:
+        return (
+            f"<PmQuote scan={self.scan_id} market={self.market_id} token=…{self.token[-6:]} "
+            f"bid={self.best_bid} ask={self.best_ask}>"
+        )
+
+
+class BookQuote(Base):
+    __tablename__ = "book_quotes"
+    __table_args__ = (Index("ix_book_quotes_scan_game", "scan_id", "game_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    scan_id: Mapped[int] = mapped_column(ForeignKey("scans.id"), nullable=False)
+    game_id: Mapped[int] = mapped_column(ForeignKey("games.id"), nullable=False)
+    bookmaker: Mapped[str] = mapped_column(String(40), nullable=False)
+    market_key: Mapped[str] = mapped_column(String(16), nullable=False)  # h2h|spreads|totals
+    outcome_name: Mapped[str] = mapped_column(String(80), nullable=False)
+    price_american: Mapped[int] = mapped_column(Integer, nullable=False)
+    point: Mapped[float | None] = mapped_column(Float)
+    last_update: Mapped[datetime | None] = mapped_column(UtcDateTime)
+    fetched_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False, default=utcnow)
+
+    game: Mapped[Game] = relationship()
+
+    def __repr__(self) -> str:
+        return (
+            f"<BookQuote scan={self.scan_id} game={self.game_id} {self.bookmaker} "
+            f"{self.market_key} {self.outcome_name} {self.price_american:+d} pt={self.point}>"
+        )
+
+
+class Opportunity(Base):
+    __tablename__ = "opportunities"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    scan_id: Mapped[int] = mapped_column(ForeignKey("scans.id"), nullable=False, index=True)
+    market_id: Mapped[str] = mapped_column(ForeignKey("markets.id"), nullable=False, index=True)
+    token: Mapped[str] = mapped_column(String(100), nullable=False)
+    outcome_key: Mapped[str | None] = mapped_column(String(8))
+    outcome_name: Mapped[str] = mapped_column(String(80), nullable=False)
+    ask: Mapped[float] = mapped_column(Float, nullable=False)
+    effective_price: Mapped[float] = mapped_column(Float, nullable=False)
+    fair_prob: Mapped[float] = mapped_column(Float, nullable=False)
+    fair_method: Mapped[str] = mapped_column(String(16), nullable=False, default="power")
+    n_books: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    books_used: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    edge: Mapped[float] = mapped_column(Float, nullable=False, index=True)
+    ev_per_dollar: Mapped[float] = mapped_column(Float, nullable=False)
+    kelly: Mapped[float] = mapped_column(Float, nullable=False)
+    suggested_stake: Mapped[float] = mapped_column(Float, nullable=False)
+    fill_price: Mapped[float | None] = mapped_column(Float)
+    limit_price: Mapped[float | None] = mapped_column(Float)
+    computed_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False, default=utcnow)
+
+    market: Mapped[Market] = relationship(back_populates="opportunities")
+    scan: Mapped[Scan] = relationship(back_populates="opportunities")
+
+    def __repr__(self) -> str:
+        return (
+            f"<Opportunity id={self.id} market={self.market_id} {self.outcome_name} "
+            f"ask={self.ask} fair={self.fair_prob:.3f} edge={self.edge:+.3f} "
+            f"stake={self.suggested_stake}>"
+        )
+
+
+class Bet(Base):
+    __tablename__ = "bets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    market_id: Mapped[str] = mapped_column(ForeignKey("markets.id"), nullable=False, index=True)
+    token: Mapped[str] = mapped_column(String(100), nullable=False)
+    outcome_key: Mapped[str | None] = mapped_column(String(8))
+    outcome_name: Mapped[str] = mapped_column(String(80), nullable=False)
+    mode: Mapped[str] = mapped_column(String(8), nullable=False, default="taker")  # taker|maker
+    price: Mapped[float] = mapped_column(Float, nullable=False)
+    shares: Mapped[float] = mapped_column(Float, nullable=False)
+    stake_usd: Mapped[float] = mapped_column(Float, nullable=False)
+    fee_usd: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    fair_at_bet: Mapped[float | None] = mapped_column(Float)
+    edge_at_bet: Mapped[float | None] = mapped_column(Float)
+    placed_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False, default=utcnow)
+    status: Mapped[str] = mapped_column(
+        String(8), nullable=False, default="open", index=True
+    )  # open|won|lost|void
+    settled_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
+    pnl_usd: Mapped[float | None] = mapped_column(Float)
+    closing_fair: Mapped[float | None] = mapped_column(Float)
+    closing_pm_price: Mapped[float | None] = mapped_column(Float)
+    clv: Mapped[float | None] = mapped_column(Float)
+    notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+
+    market: Mapped[Market] = relationship(back_populates="bets")
+
+    def __repr__(self) -> str:
+        return (
+            f"<Bet id={self.id} market={self.market_id} {self.outcome_name} {self.mode} "
+            f"price={self.price} stake={self.stake_usd} status={self.status} pnl={self.pnl_usd}>"
+        )
+
+
+class Prefs(Base):
+    """Single-row user preferences (see SPEC.md "Preferences")."""
+
+    __tablename__ = "prefs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    bankroll: Mapped[float] = mapped_column(Float, nullable=False, default=1000.0)
+    kelly_fraction: Mapped[float] = mapped_column(Float, nullable=False, default=0.25)
+    max_stake_pct: Mapped[float] = mapped_column(Float, nullable=False, default=2.0)
+    min_edge: Mapped[float] = mapped_column(Float, nullable=False, default=0.02)
+    taker_fee_rate: Mapped[float] = mapped_column(Float, nullable=False, default=0.05)
+    devig_method: Mapped[str] = mapped_column(String(16), nullable=False, default="power")
+    bookmakers: Mapped[list] = mapped_column(
+        JSON, nullable=False, default=lambda: list(DEFAULT_BOOKMAKERS)
+    )
+    book_weights: Mapped[dict] = mapped_column(
+        JSON, nullable=False, default=lambda: dict(DEFAULT_BOOK_WEIGHTS)
+    )
+    leagues_enabled: Mapped[list] = mapped_column(
+        JSON, nullable=False, default=lambda: list(DEFAULT_LEAGUES)
+    )
+    espn_fallback_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    match_window_hours: Mapped[float] = mapped_column(Float, nullable=False, default=36.0)
+    min_liquidity_usd: Mapped[float] = mapped_column(Float, nullable=False, default=100.0)
+    stale_book_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=720)
+    updated_at: Mapped[datetime] = mapped_column(
+        UtcDateTime, nullable=False, default=utcnow, onupdate=utcnow
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<Prefs bankroll={self.bankroll} kelly={self.kelly_fraction} "
+            f"min_edge={self.min_edge} fee={self.taker_fee_rate} devig={self.devig_method}>"
+        )
+
+
+__all__ = [
+    "DEFAULT_BOOKMAKERS",
+    "DEFAULT_BOOK_WEIGHTS",
+    "DEFAULT_LEAGUES",
+    "DEFAULT_PREFS",
+    "Bet",
+    "BookQuote",
+    "Game",
+    "Market",
+    "Opportunity",
+    "PmQuote",
+    "Prefs",
+    "Scan",
+    "UtcDateTime",
+    "utcnow",
+]

@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Settings · {{ app_name }}{% endblock %}
+{% block content %}
+<h1 class="page-title">Settings</h1>
+<section class="card">
+  <div class="stat"><span class="stat-label">Bankroll</span><span class="stat-value">{{ prefs.bankroll|usd }}</span></div>
+  <div class="stat"><span class="stat-label">Kelly fraction</span><span class="stat-value">{{ prefs.kelly_fraction }}</span></div>
+  <div class="stat"><span class="stat-label">Min edge</span><span class="stat-value">{{ prefs.min_edge|pct }}</span></div>
+  <div class="stat"><span class="stat-label">Taker fee</span><span class="stat-value">{{ prefs.taker_fee_rate|pct }}</span></div>
+  <div class="stat"><span class="stat-label">De-vig</span><span class="stat-value">{{ prefs.devig_method }}</span></div>
+  <p class="muted">Settings form placeholder.</p>
+</section>
+{% endblock %}

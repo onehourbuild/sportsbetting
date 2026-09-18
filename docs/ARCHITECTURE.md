@@ -365,3 +365,52 @@ Tolerance 1e-5 unless stated.
   `ledger_summary(session) -> dict`.
 - Routes render Jinja templates; htmx partials for refresh, log-bet form, settle. JSON only at `/healthz`
   and `/api/opportunities` (for debugging).
+
+## Services API
+
+Exact signatures of the service layer (the one contract edit made by the scaffold step).
+Routes and the CLI call only these; all math stays in `app/core`.
+
+```python
+# app/services/prefs.py
+def get_prefs(session: Session) -> Prefs                       # creates the singleton row with defaults
+def update_prefs(session: Session, data: dict) -> Prefs        # validates types/ranges, raises ValueError
+def validate_prefs(data: Mapping[str, Any]) -> dict            # pure; used by update_prefs
+
+# app/services/scan.py
+def run_scan(session: Session, *, polymarket: PolymarketClient, oddsapi: OddsApiClient | None,
+             espn: EspnClient | None, prefs: Prefs | PrefsLike, kind: str, leagues: list[str],
+             now: datetime) -> ScanResult
+def run_scan_default(session: Session, kind: str, leagues: list[str] | None = None,
+                     now: datetime | None = None) -> ScanResult   # builds clients from Settings
+def estimate_books_cost(prefs: Prefs | PrefsLike) -> int          # credits a Books refresh costs
+def quota_status(session: Session) -> dict                        # keys: remaining, used, as_of
+
+# app/services/bets.py
+def create_bet(session: Session, opportunity_id: int, stake_usd: float, price: float,
+               mode: str, notes: str = "") -> Bet
+def settle_bet_manual(session: Session, bet_id: int, result: str) -> Bet   # result: won|lost|void
+def settle_open_bets(session: Session, markets_by_id: Mapping[str, PmMarket]) -> int
+def capture_closing(session: Session, scan_id: int, now: datetime) -> int
+def ledger_summary(session: Session) -> dict
+    # keys: n_open, n_settled, n_won, n_lost, total_staked, total_pnl, roi, avg_clv,
+    #       n_clv_positive, n_clv_recorded
+
+# app/services/demo.py
+def seed_demo(session: Session) -> None            # fixture-backed scan + one demo bet (BAL@TOR)
+
+# app/services/scheduler.py
+def build_scheduler(settings: Settings) -> Any | None   # None when both intervals are 0
+def start_scheduler(settings: Settings) -> Any | None
+def stop_scheduler(scheduler: Any | None) -> None
+
+# app/core/clv.py
+def clv(closing_fair: float, cost: float) -> float           # closing_fair - cost
+def clv_decimal(closing_fair: float, cost: float) -> float   # (1/cost) / (1/closing_fair) - 1
+```
+
+Model notes (scaffold): `Game.id` is an autoincrement int (used in `/games/{game_id}`);
+`Market.id` is the Gamma market id string. All datetime columns use `UtcDateTime`
+(a `DateTime(timezone=True)` decorator that normalizes to UTC on write and re-attaches
+UTC on read so SQLite round-trips stay tz-aware). `Prefs` default values are exported
+as `app.models.DEFAULT_PREFS`. `PrefsLike` lives in `app/core/types.py`.

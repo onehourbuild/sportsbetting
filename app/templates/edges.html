@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Edges · {{ app_name }}{% endblock %}
+{% block content %}
+<h1 class="page-title">Edges</h1>
+<div class="chips">
+  {% for league in LEAGUES %}<span class="chip">{{ league|upper }}</span>{% endfor %}
+</div>
+<section class="card">
+  <p class="muted">No scan yet. Refresh Polymarket to find opportunities.</p>
+  <div class="row">
+    <button class="btn btn-primary" disabled>Refresh Polymarket</button>
+    <button class="btn" disabled>Refresh Books</button>
+  </div>
+</section>
+{% endblock %}
