@@ -19,6 +19,7 @@ from app.clients.polymarket import (
     CLOB,
     EVENTS_PAGE_SIZE,
     GAMMA,
+    MAX_PAGES,
     TEAMS_PAGE_SIZE,
     PolymarketClient,
     PolymarketError,
@@ -193,7 +194,7 @@ EXPECTED_ASKS: dict[str, dict[str, tuple[float, float]]] = {
         "500203": (0.50, 0.50),
     },
     "nba": {
-        "500301": (0.31, 0.66),
+        "500301": (0.37, 0.64),
         "500302": (0.50, 0.52),
         "500303": (0.50, 0.51),
         "500401": (0.48, 0.55),
@@ -202,7 +203,7 @@ EXPECTED_ASKS: dict[str, dict[str, tuple[float, float]]] = {
     },
     "mlb": {
         "500501": (0.40, 0.58),
-        "500502": (0.44, 0.58),
+        "500502": (0.58, 0.43),
         "500503": (0.50, 0.52),
         "500601": (0.41, 0.62),
         "500602": (0.55, 0.45),
@@ -535,7 +536,7 @@ def test_numeric_fields_fee_guard_and_start_time_fallbacks() -> None:
         liquidity="1234.5",
         volumeNum=None,
         volume="99.25",
-        gameStartTime=None,  # -> event startDate
+        gameStartTime=None,  # no kickoff: event startDate is NOT a substitute
         orderPriceMinTickSize="0.001",
         orderMinSize="15",
         bestBid=None,
@@ -570,7 +571,7 @@ def test_numeric_fields_fee_guard_and_start_time_fallbacks() -> None:
     a = by_id["630001"]
     assert a.taker_fee_rate is None
     assert a.liquidity == 1234.5 and a.volume == 99.25
-    assert a.game_start == datetime(2026, 9, 20, 20, 25, tzinfo=UTC)
+    assert a.game_start is None  # the event's startDate is a listing time, not kickoff
     assert a.tick_size == 0.001 and a.min_order_size == 15.0
     assert a.outcomes[0].best_bid is None and a.outcomes[1].best_ask is None
     assert a.resolved_outcome_index is None
@@ -731,7 +732,7 @@ def test_order_books_dedupes_skips_empty_and_accepts_dict_payload() -> None:
     client, _ = _client([("POST", f"{CLOB}/books", "clob_books.json")])
     books = client.order_books(tokens)
     assert set(books) == set(tokens)
-    assert (books[tokens[0]].best_ask, books[tokens[1]].best_ask) == (0.31, 0.66)
+    assert (books[tokens[0]].best_ask, books[tokens[1]].best_ask) == (0.37, 0.64)
 
 
 def test_order_books_errors_are_wrapped() -> None:
@@ -777,3 +778,319 @@ def test_teams_paginates_and_wraps_errors() -> None:
         client.teams("nfl")
     with pytest.raises(PolymarketError, match="unknown league"):
         client.teams("xfl")  # type: ignore[arg-type]
+
+
+# --------------------------------------------------------------------------- review fixes
+
+
+def test_events_dedupes_events_and_markets_served_on_two_pages() -> None:
+    """Offset paging over a list that shifts between requests can serve an event twice."""
+    kc = _event(
+        "10001",
+        "nfl-kc-buf-2026-09-20",
+        [_raw_market("500101", "Chiefs vs. Bills", "moneyline", ["Chiefs", "Bills"])],
+    )
+    filler = [
+        _event(
+            f"2{i:04d}",
+            f"nfl-kc-buf-2026-10-{(i % 28) + 1:02d}",
+            [_raw_market(f"6{i:05d}", "Chiefs vs. Bills", "moneyline", ["Chiefs", "Bills"])],
+        )
+        for i in range(EVENTS_PAGE_SIZE - 1)
+    ]
+    page_two = [
+        kc,  # the same event again after the list shifted
+        _event(
+            "10002",
+            "nfl-dal-phi-2026-09-20",
+            [_raw_market("500201", "Cowboys vs. Eagles", "moneyline", ["Cowboys", "Eagles"])],
+        ),
+        _event(  # a new event that re-uses an already seen market id
+            "10003",
+            "nfl-kc-buf-2026-11-01",
+            [_raw_market("500101", "Chiefs vs. Bills", "moneyline", ["Chiefs", "Bills"])],
+        ),
+    ]
+
+    def handler(url: str, params: Any, body: Any) -> tuple[Any, dict]:
+        assert params["order"] == "id" and params["ascending"] == "true"
+        assert params["sports_market_types"] == ["moneyline", "spreads", "totals"]
+        return ([*filler, kc] if params["offset"] == 0 else page_two), {}
+
+    client, transport = _client([("GET", f"{GAMMA}/events", handler)])
+    markets, unparseable = client.events("nfl")
+    ids = [m.market_id for m in markets]
+    assert len(ids) == len(set(ids)) == EVENTS_PAGE_SIZE + 1
+    assert ids.count("500101") == 1 and "500201" in ids
+    assert client.duplicates_dropped == ["event:10001", "market:500101"]
+    assert unparseable == []
+    assert [c["params"]["offset"] for c in transport.calls] == [0, EVENTS_PAGE_SIZE]
+    # the record is per call
+    client, _ = _client([("GET", f"{GAMMA}/events", _static([kc]))])
+    client.events("nfl")
+    assert client.duplicates_dropped == []
+
+
+def test_market_uses_the_callers_league_when_the_payload_has_no_tag_or_prefix() -> None:
+    raw = _fixture_market("mlb", "500701")
+    bare = dict(raw, slug="orioles-vs-blue-jays-2026-09-17")
+    bare["events"] = [
+        {
+            "slug": "orioles-vs-blue-jays-2026-09-17",
+            "tags": [{"slug": "sports"}, {"slug": "games"}],
+        }
+    ]
+    client, _ = _client([("GET", f"{GAMMA}/markets/", _static(bare))])
+    with pytest.raises(PolymarketError, match="cannot determine league"):
+        client.market("500701")
+    market = client.market("500701", league="mlb")
+    assert market is not None
+    assert market.league == "mlb" and market.resolved_outcome_index == 1
+    assert (market.away_team_key, market.home_team_key) == ("BAL", "TOR")
+    # a nonsense hint is ignored, and payload evidence beats a wrong hint
+    client, _ = _client([("GET", f"{GAMMA}/markets/", _static(bare))])
+    with pytest.raises(PolymarketError, match="cannot determine league"):
+        client.market("500701", league="nhl")  # type: ignore[arg-type]
+    tagged = dict(raw)
+    tagged["events"] = [{"slug": "mlb-bal-tor-2026-09-17", "tags": [{"slug": "mlb"}]}]
+    client, _ = _client([("GET", f"{GAMMA}/markets/", _static(tagged))])
+    assert client.market("500701", league="nfl").league == "mlb"
+
+
+def test_taker_fee_override_is_only_believed_inside_the_sports_band(caplog) -> None:
+    """`takerBaseFee` is read as basis points (UNVERIFIED, docs/RESEARCH.md item 7). A
+    fraction, a percent or a flag divides down to a near-zero rate that would silently
+    remove the taker fee, so only a plausible sports rate may override the preference."""
+    accepted = {"650001": 500, "650002": 100, "650003": 2000}  # 0.05, 0.01, 0.20
+    rejected = {"650011": 0.05, "650012": 5, "650013": 1, "650014": 5000, "650015": "0.5"}
+    raws = [
+        _raw_market(mid, "Chiefs vs. Bills", "moneyline", ["Chiefs", "Bills"], takerBaseFee=fee)
+        for mid, fee in {**accepted, **rejected}.items()
+    ]
+    client, _ = _client(
+        [("GET", f"{GAMMA}/events", _static([_event("10015", "nfl-kc-buf-2026-09-20", raws)]))]
+    )
+    with caplog.at_level(logging.WARNING, logger="app.clients.polymarket"):
+        markets, unparseable = client.events("nfl")
+    assert unparseable == []
+    by_id = _by_id(markets)
+    assert [by_id[mid].taker_fee_rate for mid in accepted] == [0.05, 0.01, 0.2]
+    assert [by_id[mid].taker_fee_rate for mid in rejected] == [None] * len(rejected)
+    messages = [r.getMessage() for r in caplog.records]
+    warned = [m for m in messages if "implausible takerBaseFee" in m]
+    assert len(warned) == len(rejected)
+    assert all(mid in "".join(warned) for mid in rejected)
+
+    # every override is recorded for Diagnostics: rate=None means "fell back to the pref"
+    recorded = {row["market_id"]: row["rate"] for row in client.taker_fee_overrides}
+    assert recorded == {
+        **dict.fromkeys(rejected, None),
+        "650001": 0.05,
+        "650002": 0.01,
+        "650003": 0.2,
+    }
+    client.events("nfl")  # the record is per call
+    assert len(client.taker_fee_overrides) == len(accepted) + len(rejected)
+
+
+def test_a_bogus_taker_fee_encoding_cannot_manufacture_an_edge() -> None:
+    """fair 0.5205 against an ask of 0.50: no edge at the real 5% fee, a +0.0205 "edge"
+    under any encoding that divides down to ~0."""
+    from datetime import timedelta
+
+    from app.core.edge import build_opportunity
+    from app.core.types import BookLevel, FairProb, OrderBook
+
+    class _Prefs:
+        bankroll = 1000.0
+        kelly_fraction = 0.25
+        max_stake_pct = 2.0
+        min_edge = 0.02
+        taker_fee_rate = 0.05
+        min_liquidity_usd = 100.0
+
+    def market_for(fee: Any) -> PmMarket:
+        raw = _raw_market(
+            "660001", "Chiefs vs. Bills", "moneyline", ["Chiefs", "Bills"], takerBaseFee=fee
+        )
+        client, _ = _client(
+            [("GET", f"{GAMMA}/events", _static([_event("10016", "nfl-kc-buf-2026-09-20", [raw])]))]
+        )
+        (market,) = client.events("nfl")[0]
+        return market
+
+    book = OrderBook(
+        token_id="t",
+        bids=(),
+        asks=(BookLevel(price=0.50, size=5000.0),),
+        tick_size=0.01,
+        fetched_at=FIXED_NOW,
+    )
+    fair = FairProb(0.5205, "power", 3, ("pinnacle",), None, (("pinnacle", 0.5205),))
+    now = FIXED_NOW - timedelta(days=1)
+    for bogus in (0.05, 5, 1):
+        market = market_for(bogus)
+        assert market.taker_fee_rate is None
+        assert build_opportunity(market, 0, book, fair, _Prefs(), None, now) is None
+    honest = market_for(500)
+    assert honest.taker_fee_rate == 0.05
+    assert build_opportunity(honest, 0, book, fair, _Prefs(), None, now) is None
+
+    # the counterfactual: had 0.05 been accepted as basis points (5e-06), the same market
+    # would have produced a +0.0205 "edge" out of the removed fee
+    import dataclasses
+
+    unguarded = dataclasses.replace(honest, taker_fee_rate=0.05 / 10000.0)
+    opportunity = build_opportunity(unguarded, 0, book, fair, _Prefs(), None, now)
+    assert opportunity is not None and round(opportunity.edge, 4) == 0.0205
+
+
+def test_missing_game_start_time_never_borrows_the_events_start_date() -> None:
+    """Gamma's event startDate is the listing time (the fixture sets it six days early).
+    One market without gameStartTime must not backdate the game into "already started"."""
+    with_start = _raw_market("670001", "Chiefs vs. Bills", "moneyline", ["Chiefs", "Bills"])
+    without = _raw_market(
+        "670002", "Spread: Chiefs (-3.5)", "spreads", ["Chiefs", "Bills"], gameStartTime=None
+    )
+    event = _event(
+        "10017",
+        "nfl-kc-buf-2026-09-20",
+        [with_start, without],
+        startDate="2026-09-14T12:00:00Z",  # six days before kickoff
+    )
+    client, _ = _client([("GET", f"{GAMMA}/events", _static([event]))])
+    markets, unparseable = client.events("nfl")
+    assert unparseable == []
+    by_id = _by_id(markets)
+    assert by_id["670001"].game_start == datetime(2026, 9, 20, 20, 25, tzinfo=UTC)
+    assert by_id["670002"].game_start is None
+    assert all(m.game_start != datetime(2026, 9, 14, 12, 0, tzinfo=UTC) for m in markets)
+
+
+def test_accepting_orders_falls_back_to_enable_order_book_and_active() -> None:
+    """A payload variant that omits acceptingOrders must not make every market untradable
+    with one indistinguishable reason."""
+
+    def raw(market_id: str, **kw: Any) -> dict:
+        market = _raw_market(market_id, "Chiefs vs. Bills", "moneyline", ["Chiefs", "Bills"], **kw)
+        market.pop("acceptingOrders", None)
+        return market
+
+    enabled = raw("680001", enableOrderBook=True, active=False)
+    active_only = raw("680002", active=True)
+    book_off = raw("680003", enableOrderBook=False, active=True)  # explicit no
+    silent = raw("680004")
+    silent.pop("active", None)
+    explicit = _raw_market(
+        "680005", "Chiefs vs. Bills", "moneyline", ["Chiefs", "Bills"], acceptingOrders=False
+    )
+    resolved = raw("680006", active=False, closed=True, outcomePrices='["1", "0"]')
+    event = _event("10018", "nfl-kc-buf-2026-09-20", [enabled, active_only, book_off, silent])
+    client, _ = _client([("GET", f"{GAMMA}/events", _static([event]))])
+    markets, unparseable = client.events("nfl")
+    by_id = _by_id(markets)
+    assert [m.market_id for m in markets] == ["680001", "680002"]
+    assert by_id["680001"].accepting_orders is True and by_id["680002"].accepting_orders is True
+    assert [(u["market_id"], u["reason"]) for u in unparseable] == [
+        ("680003", "acceptingOrders missing (enableOrderBook/active off)"),
+        ("680004", "acceptingOrders missing (enableOrderBook/active off)"),
+    ]
+
+    # an explicit false is still an explicit false, and a closed market is kept for settlement
+    closed_event = _event("10019", "nfl-kc-buf-2026-09-20", [explicit, resolved])
+    client, _ = _client([("GET", f"{GAMMA}/events", _static([closed_event]))])
+    markets, unparseable = client.events("nfl", include_closed=True)
+    assert unparseable == []
+    by_id = _by_id(markets)
+    assert by_id["680005"].accepting_orders is False and by_id["680005"].closed is False
+    assert by_id["680006"].closed is True and by_id["680006"].accepting_orders is False
+    assert by_id["680006"].resolved_outcome_index == 0
+
+
+def test_events_retries_the_first_page_without_the_optional_filters(caplog) -> None:
+    """order / ascending / sports_market_types are unverified optimisations: a 4xx on them
+    must not cost every league every market (docs/RESEARCH.md item 13)."""
+    seen: list[dict] = []
+    event = _event(
+        "10020",
+        "nfl-kc-buf-2026-09-20",
+        [_raw_market("690001", "Chiefs vs. Bills", "moneyline", ["Chiefs", "Bills"])],
+    )
+
+    def handler(url: str, params: Any, body: Any) -> tuple[Any, dict]:
+        seen.append(dict(params))
+        if "sports_market_types" in params:
+            raise TransportError("invalid query parameter", status=422, url=url)
+        return [event], {}
+
+    client, _ = _client([("GET", f"{GAMMA}/events", handler)])
+    with caplog.at_level(logging.WARNING, logger="app.clients.polymarket"):
+        markets, unparseable = client.events("nfl")
+    assert [m.market_id for m in markets] == ["690001"] and unparseable == []
+    assert len(seen) == 2
+    assert {"order", "ascending", "sports_market_types"} <= set(seen[0])
+    assert not {"order", "ascending", "sports_market_types"} & set(seen[1])
+    assert seen[1]["tag_slug"] == "nfl" and seen[1]["offset"] == 0 and seen[1]["closed"] == "false"
+    assert client.events_filters_dropped is True
+    assert any("retrying without them" in r.getMessage() for r in caplog.records)
+
+    # sticky: the next league asks without them on the first try
+    client.events("nba")
+    assert len(seen) == 3 and "sports_market_types" not in seen[2]
+
+    # a 5xx is not a parameter problem and is raised as it is
+    def boom(url: str, params: Any, body: Any) -> tuple[Any, dict]:
+        raise TransportError("upstream down", status=503, url=url)
+
+    client, transport = _client([("GET", f"{GAMMA}/events", boom)])
+    with pytest.raises(PolymarketError, match="events fetch failed"):
+        client.events("nfl")
+    assert len(transport.calls) == 1 and client.events_filters_dropped is False
+
+
+def test_events_stops_after_max_pages(caplog) -> None:
+    """A server that ignores `offset` would page for ever; the hard stop bounds it."""
+    page = [
+        _event(
+            f"3{i:04d}",
+            f"nfl-kc-buf-2026-10-{(i % 28) + 1:02d}",
+            [_raw_market(f"7{i:05d}", "Chiefs vs. Bills", "moneyline", ["Chiefs", "Bills"])],
+        )
+        for i in range(EVENTS_PAGE_SIZE)
+    ]
+    client, transport = _client([("GET", f"{GAMMA}/events", _static(page))])
+    with caplog.at_level(logging.WARNING, logger="app.clients.polymarket"):
+        markets, unparseable = client.events("nfl")
+    assert len(transport.calls) == MAX_PAGES == 100
+    assert [c["params"]["offset"] for c in transport.calls[:3]] == [0, 100, 200]
+    assert unparseable == []
+    ids = [m.market_id for m in markets]
+    assert len(ids) == len(set(ids)) == EVENTS_PAGE_SIZE == 100
+    assert any(f"stopped after {MAX_PAGES} pages" in r.getMessage() for r in caplog.records)
+    # every event of every page after the first is recorded as a duplicate
+    assert len(client.duplicates_dropped) == (MAX_PAGES - 1) * EVENTS_PAGE_SIZE
+    assert set(client.duplicates_dropped) == {f"event:{e['id']}" for e in page}
+
+
+def test_inferred_market_type_requires_a_game_start_time() -> None:
+    inferred = _raw_market(
+        "640001", "Chiefs vs. Bills", "", ["Chiefs", "Bills"], gameStartTime=None
+    )
+    explicit = _raw_market(
+        "640002", "Chiefs vs. Bills", "moneyline", ["Chiefs", "Bills"], gameStartTime=None
+    )
+    ok = _raw_market("640003", "Chiefs vs. Bills", "", ["Chiefs", "Bills"])
+    series = _raw_market("640004", "Chiefs vs. Bills (Series)", "", ["Chiefs", "Bills"])
+    event = _event("10014", "nfl-kc-buf-2026-09-20", [inferred, explicit, ok, series])
+    client, _ = _client([("GET", f"{GAMMA}/events", _static([event]))])
+    markets, unparseable = client.events("nfl")
+    assert [m.market_id for m in markets] == ["640002", "640003"]
+    by_id = _by_id(markets)
+    # an explicitly typed market survives without a kickoff, but keeps game_start unset:
+    # the event's startDate is the listing time, not the game's
+    assert by_id["640002"].game_start is None
+    assert by_id["640003"].market_type == "moneyline"
+    assert [(u["market_id"], u["reason"]) for u in unparseable] == [
+        ("640001", "no gameStartTime (market type inferred from the question)"),
+        ("640004", "unsupported market type ''"),
+    ]

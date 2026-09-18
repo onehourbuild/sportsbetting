@@ -2,9 +2,11 @@
   {% if summary %}
   <div class="tile"><span class="tile-label">Open</span><span class="tile-value">{{ summary.n_open if summary.n_open is not none else '—' }}</span></div>
   <div class="tile"><span class="tile-label">Settled</span><span class="tile-value">{{ summary.n_settled if summary.n_settled is not none else '—' }}</span>
-    <span class="tile-sub">{{ summary.n_won or 0 }}W · {{ summary.n_lost or 0 }}L</span></div>
+    {# Pushes only appear once one exists: the tile is 63px wide on a 390px phone and
+       "3W · 2L · 0P" is what breaks it. #}
+    <span class="tile-sub">{{ summary.n_won or 0 }}W · {{ summary.n_lost or 0 }}L{% if summary.n_push %} · {{ summary.n_push }}P{% endif %}</span></div>
   <div class="tile"><span class="tile-label">P&amp;L</span>
-    <span class="tile-value {{ 'good' if (summary.total_pnl or 0) > 0 else ('bad' if (summary.total_pnl or 0) < 0 else '') }}">{{ summary.total_pnl|usd }}</span>
+    <span class="tile-value {{ 'good' if (summary.total_pnl or 0) > 0 else ('bad' if (summary.total_pnl or 0) < 0 else '') }}">{{ summary.total_pnl|usd_signed }}</span>
     <span class="tile-sub">staked {{ summary.total_staked|usd(0) }}</span></div>
   <div class="tile"><span class="tile-label">ROI</span>
     <span class="tile-value {{ 'good' if (summary.roi or 0) > 0 else ('bad' if (summary.roi or 0) < 0 else '') }}">{{ summary.roi|signed_pct }}</span></div>

@@ -14,6 +14,8 @@
   --info: #6cb4ff;
   --good: #3ddc97;
   --bad: #ff6b6b;
+  --nba: #ff9a57;
+  --nba-tint: rgba(255, 140, 66, 0.18);
   --shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   --topbar-bg: rgba(11, 15, 20, 0.92);
   --nav-bg: rgba(19, 26, 34, 0.96);
@@ -43,6 +45,8 @@
     --info: #1f6fd1;
     --good: #0e9f6e;
     --bad: #d2373f;
+    --nba: #b45309;
+    --nba-tint: rgba(180, 83, 9, 0.12);
     --shadow: 0 8px 24px rgba(20, 30, 40, 0.18);
     --topbar-bg: rgba(245, 247, 250, 0.92);
     --nav-bg: rgba(255, 255, 255, 0.96);
@@ -91,7 +95,7 @@ pre { white-space: pre-wrap; word-break: break-word; }
   position: sticky; top: 0; z-index: 20;
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   min-height: var(--tap);
-  padding: env(safe-area-inset-top) var(--gutter) 0;
+  padding: env(safe-area-inset-top) max(var(--gutter), env(safe-area-inset-right)) 0 max(var(--gutter), env(safe-area-inset-left));
   background: var(--topbar-bg);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -100,11 +104,14 @@ pre { white-space: pre-wrap; word-break: break-word; }
 .brand { font-weight: 700; color: var(--text); font-size: 17px; line-height: var(--tap); white-space: nowrap; }
 .topbar-right { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
 
-/* Page */
-.page { padding: 12px var(--gutter) 24px; max-width: var(--max-w); margin: 0 auto; width: 100%; }
+/* Page. The horizontal padding also clears the notch in landscape (viewport-fit=cover). */
+.page {
+  padding: 12px max(var(--gutter), env(safe-area-inset-right)) 24px max(var(--gutter), env(safe-area-inset-left));
+  max-width: var(--max-w); margin: 0 auto; width: 100%;
+}
 .stack { display: flex; flex-direction: column; gap: 12px; }
 .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-.back-link { display: inline-flex; align-items: center; min-height: 36px; color: var(--text-muted); font-weight: 600; }
+.back-link { display: inline-flex; align-items: center; min-height: var(--tap); color: var(--text-muted); font-weight: 600; }
 
 /* Card */
 .card {
@@ -160,7 +167,7 @@ pre { white-space: pre-wrap; word-break: break-word; }
 .badge-info { background: rgba(108, 180, 255, 0.15); color: var(--info); }
 .badge-league { min-width: 40px; text-align: center; }
 .league-nfl { background: rgba(108, 180, 255, 0.18); color: var(--info); }
-.league-nba { background: rgba(255, 140, 66, 0.18); color: #ff9a57; }
+.league-nba { background: var(--nba-tint); color: var(--nba); }
 .league-mlb { background: rgba(255, 107, 107, 0.16); color: var(--bad); }
 
 /* Scan bar (edges page) */
@@ -181,7 +188,8 @@ pre { white-space: pre-wrap; word-break: break-word; }
 
 /* Opportunity / bet cards */
 .opp-head, .bet-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
-.opp-title, .bet-title { font-weight: 700; color: var(--text); flex: 1 1 auto; min-width: 0; }
+/* The title is the only link to the game page: give it a full-height tap target. */
+.opp-title, .bet-title { display: flex; align-items: center; min-height: var(--tap); font-weight: 700; color: var(--text); flex: 1 1 auto; min-width: 0; }
 .opp-time { color: var(--text-muted); font-size: 15px; white-space: nowrap; }
 .opp-side { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
 .opp-market { color: var(--text-muted); font-size: 15px; }
@@ -198,17 +206,30 @@ pre { white-space: pre-wrap; word-break: break-word; }
 .metrics-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .metrics > div { display: flex; flex-direction: column; min-width: 0; padding: 6px 8px; background: var(--bg-elev-2); border-radius: 8px; }
 .metrics dt { font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-muted); font-weight: 600; }
-.metrics dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 700; font-size: 15px; overflow-wrap: anywhere; }
-@media (max-width: 359px) { .metrics, .metrics-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* A metric value is a number: never split it across lines (the card sets overflow-wrap:
+   anywhere for prose). Too long for its cell is clipped, not broken. */
+.metrics dd {
+  margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 700;
+  font-size: 15px; white-space: nowrap; overflow-wrap: normal;
+  overflow: hidden; text-overflow: ellipsis;
+}
+/* Below ~420px four columns leave 52-66px per cell, while "$100.00" needs ~63px and
+   "multiplicative" ~126px. Two columns fit both; .metrics-3 (bid/ask/mid) stays at three. */
+@media (max-width: 419px) {
+  .metrics, .metrics-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .metrics-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
 
 /* Summary tiles */
 .tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+/* Below ~420px three tiles leave ~92px per value: "-$1,234.56" would break mid-number. */
+@media (max-width: 419px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .tile {
   display: flex; flex-direction: column; gap: 2px; min-width: 0;
   background: var(--bg-elev); border: 1px solid var(--border); border-radius: 10px; padding: 10px;
 }
 .tile-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-muted); font-weight: 600; }
-.tile-value { font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 700; font-size: 18px; overflow-wrap: anywhere; }
+.tile-value { font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 700; font-size: clamp(15px, 4.6vw, 18px); white-space: nowrap; overflow-wrap: normal; }
 .tile-sub { font-size: 12px; color: var(--text-muted); }
 .tiles-note { grid-column: 1 / -1; margin: 0; }
 .bets-section { margin-bottom: 12px; }
@@ -249,7 +270,7 @@ table { border-collapse: collapse; width: 100%; font-size: 15px; }
 th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; }
 th { color: var(--text-muted); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: 0.03em; }
 td.num, th.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
-.depth-table { font-size: 14px; }
+.depth-table { font-size: 15px; }
 .depth-table th, .depth-table td { padding: 4px 6px; }
 .scan-table tr.failed td { color: var(--text-muted); }
 
@@ -261,23 +282,23 @@ td.num, th.num { text-align: right; font-family: var(--mono); font-variant-numer
 .outcome.has-edge { border-color: var(--accent); }
 .outcome-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; font-size: 16px; }
 details.depth { margin-top: 8px; }
-details.depth summary, details.raw-sample summary { cursor: pointer; min-height: 36px; display: flex; align-items: center; color: var(--text-muted); font-weight: 600; font-size: 15px; }
+details.depth summary, details.raw-sample summary { cursor: pointer; min-height: var(--tap); display: flex; align-items: center; color: var(--text-muted); font-weight: 600; font-size: 15px; }
 @media (min-width: 520px) { .outcomes { grid-template-columns: 1fr 1fr; } }
 
 /* Diagnostics */
 .diag-list { list-style: none; margin: 0; padding: 0; }
 .diag-list li { padding: 8px 0; border-bottom: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
 .diag-list li:last-child { border-bottom: 0; }
-.diag-list.errors li { color: var(--danger); font-size: 14px; }
-.kv { display: inline-flex; gap: 4px; font-size: 14px; overflow-wrap: anywhere; }
-pre.raw { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px; font-size: 13px; font-family: var(--mono); overflow-x: auto; margin: 6px 0 0; }
+.diag-list.errors li { color: var(--danger); font-size: 15px; }
+.kv { display: inline-flex; gap: 4px; font-size: 15px; overflow-wrap: anywhere; }
+pre.raw { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px; font-size: 14px; font-family: var(--mono); overflow-x: auto; margin: 6px 0 0; }
 
 /* Bottom nav */
 .bottom-nav {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
   display: grid; grid-template-columns: repeat(4, 1fr);
   height: calc(var(--nav-h) + env(safe-area-inset-bottom));
-  padding-bottom: env(safe-area-inset-bottom);
+  padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   background: var(--nav-bg);
   border-top: 1px solid var(--border);
   backdrop-filter: blur(8px);
@@ -291,7 +312,8 @@ pre.raw { background: var(--bg); border: 1px solid var(--border); border-radius:
 .nav-item.active { color: var(--accent); }
 .nav-icon { font-size: 18px; line-height: 1; }
 
-/* Toast */
+/* Toast. It is a status message, never a target: pointer-events none so it cannot swallow
+   a tap on whatever it covers (it sat exactly over the sheet's submit button for 6s). */
 .toast {
   position: fixed; left: 50%; bottom: calc(var(--nav-h) + 12px + env(safe-area-inset-bottom));
   transform: translateX(-50%);
@@ -299,21 +321,28 @@ pre.raw { background: var(--bg); border: 1px solid var(--border); border-radius:
   padding: 10px 14px; border-radius: 10px;
   background: var(--bg-elev-2); color: var(--text); border: 1px solid var(--border);
   box-shadow: var(--shadow); z-index: 60; font-size: 15px;
+  pointer-events: none;
 }
+/* While the bottom sheet is up, the toast would cover its buttons: put it at the top. */
+body.sheet-open .toast { bottom: auto; top: calc(env(safe-area-inset-top) + 12px); }
 .toast[hidden] { display: none; }
 .toast.error { border-color: var(--danger); }
 .toast:empty { display: none; }
 
 /* Bottom sheet (log-bet form) */
 .sheet:empty { display: none; }
-.sheet-backdrop { position: fixed; inset: 0; background: var(--backdrop); z-index: 45; }
+/* While the sheet is open the page behind it must not scroll (aria-modal). */
+body.sheet-open { overflow: hidden; }
+.sheet-backdrop { position: fixed; inset: 0; background: var(--backdrop); z-index: 45; touch-action: none; }
 .sheet-panel {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
   max-width: var(--max-w); margin: 0 auto;
   max-height: calc(100vh - 40px); overflow-y: auto; -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain; touch-action: pan-y;
   background: var(--bg-elev); border: 1px solid var(--border); border-bottom: 0;
   border-radius: 16px 16px 0 0; box-shadow: var(--shadow);
-  padding: 8px var(--gutter) calc(16px + env(safe-area-inset-bottom));
+  padding: 8px max(var(--gutter), env(safe-area-inset-right))
+           calc(16px + env(safe-area-inset-bottom)) max(var(--gutter), env(safe-area-inset-left));
   animation: sheet-up 180ms ease-out;
 }
 @keyframes sheet-up { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
@@ -327,7 +356,11 @@ pre.raw { background: var(--bg); border: 1px solid var(--border); border-radius:
 .logged .row .btn { flex: 1 1 45%; }
 
 /* Login */
-.login-body { display: flex; align-items: center; justify-content: center; padding: var(--gutter); }
+.login-body {
+  display: flex; align-items: center; justify-content: center;
+  padding: var(--gutter) max(var(--gutter), env(safe-area-inset-right))
+           var(--gutter) max(var(--gutter), env(safe-area-inset-left));
+}
 .login-card { width: 100%; max-width: 380px; }
 
 /* htmx */

@@ -9,9 +9,11 @@ Everything here is deterministic, pure Python, and covered by tests/test_matchin
 
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from app.core import odds_math
 from app.core.types import (
@@ -24,6 +26,8 @@ from app.core.types import (
     PmMarket,
     PmOutcome,
 )
+
+log = logging.getLogger(__name__)
 
 # --------------------------------------------------------------------------- normalization
 
@@ -264,6 +268,37 @@ def team_key(name: str, league: League) -> str | None:
 
 # --------------------------------------------------------------------------- matching
 
+# Leagues that play the same opponent on consecutive days need a tighter window than the
+# 36 h the caller passes: MLB and NBA series games N and N+1 are the same pairing about a
+# day apart, and books post the next day's MLB lines late, so a wide window happily prices
+# Polymarket's game N+1 against the book's game N (different starting pitchers, very
+# different prices) and then stores those lines under the wrong game. NFL keeps the wide
+# window: teams meet once, and the market is listed days ahead of kickoff.
+# `window_hours` stays the caller's outer bound; this only ever narrows it.
+SERIES_WINDOW_HOURS: dict[str, float] = {"mlb": 6.0, "nba": 6.0}
+# US Eastern is how a league's "game day" is defined (a 22:10 ET first pitch is the 19th's
+# game even though it is the 20th in UTC), so same-calendar-day pairs still match when they
+# are further apart than the tight window.
+GAME_DAY_TZ = ZoneInfo("America/New_York")
+DIFFERENT_GAME_DAY = "different game day"
+
+
+def _game_day(value: datetime) -> object:
+    return value.astimezone(GAME_DAY_TZ).date()
+
+
+def _within_league_window(
+    league: str, start: datetime, commence: datetime, window: timedelta
+) -> bool:
+    """Is this book game close enough to be the same game, for this league?"""
+    delta = abs(commence - start)
+    if delta > window:
+        return False
+    tight = SERIES_WINDOW_HOURS.get(league)
+    if tight is None:
+        return True
+    return delta <= timedelta(hours=tight) or _game_day(start) == _game_day(commence)
+
 
 def _as_utc(value: datetime | None) -> datetime | None:
     if value is None:
@@ -324,17 +359,22 @@ def _match_one(
         return None, "no start time"
     best: BookGame | None = None
     best_delta: timedelta | None = None
+    in_window = False
     for game in candidates:
         commence = _as_utc(game.commence_time)
         if commence is None:
             continue
         delta = abs(commence - start)
-        if delta > window:
+        if delta <= window:
+            in_window = True
+        if not _within_league_window(market.league, start, commence, window):
             continue
         if best_delta is None or delta < best_delta:
             best, best_delta = game, delta
     if best is None:
-        return None, "outside match window"
+        # A candidate inside the caller's window that the per-league rule rejected is a
+        # neighbouring game in the same series, not a missing line.
+        return None, DIFFERENT_GAME_DAY if in_window else "outside match window"
     return best, None
 
 
@@ -344,7 +384,12 @@ def match_games(
     window_hours: float = 36.0,
 ) -> dict[str, BookGame]:
     """market_id -> BookGame: same league, same {home, away} pair (order-insensitive),
-    |start difference| <= window; nearest start wins on ties."""
+    |start difference| <= window; nearest start wins on ties.
+
+    `window_hours` is the NFL/default cap. MLB and NBA additionally require the same US
+    Eastern game day or a delta within `SERIES_WINDOW_HOURS`, so a series game is never
+    priced against its neighbour's lines.
+    """
     index = _index_games(book_games)
     window = timedelta(hours=float(window_hours))
     matched: dict[str, BookGame] = {}
@@ -362,7 +407,8 @@ def unmatched_reasons(
 ) -> list[dict]:
     """Companion to `match_games` for the Diagnostics page: one dict per unmatched market
     with keys market_id, question, league, market_type, reason. Reasons are
-    "no teams", "no book game", "no start time", "outside match window"."""
+    "no teams", "no book game", "no start time", "outside match window", "different game
+    day" (an MLB/NBA neighbour in the same series, see `match_games`)."""
     index = _index_games(book_games)
     window = timedelta(hours=float(window_hours))
     out: list[dict] = []
@@ -484,7 +530,8 @@ def fair_for_outcome(
     outcome's team. spread: this team's point must equal market.line when it is the
     line team, else -market.line, and the other team must be quoted at the mirrored
     point. total: Over/Under at point == market.line. Books missing either side of the
-    pair are skipped; None when no book qualifies.
+    pair are skipped, and so is a book whose quote the math rejects (logged at WARNING);
+    None when no book qualifies. Raises ValueError only for an unknown de-vig method.
     """
     if outcome_index not in (0, 1):
         raise ValueError(f"outcome_index must be 0 or 1, got {outcome_index!r}")
@@ -499,11 +546,26 @@ def fair_for_outcome(
         pair = _pair_for_book(market, outcome, other, game, _book_outcomes(quote, book_key))
         if pair is None:
             continue
-        raw = [
-            odds_math.american_to_prob(pair[0].price_american),
-            odds_math.american_to_prob(pair[1].price_american),
-        ]
-        devigged = odds_math.devig(raw, method)
+        try:
+            raw = [
+                odds_math.american_to_prob(pair[0].price_american),
+                odds_math.american_to_prob(pair[1].price_american),
+            ]
+            devigged = odds_math.devig(raw, method)
+        except ValueError as exc:
+            if method not in odds_math.DEVIG_METHODS:
+                raise  # a wrong method is a configuration bug, not a bad quote
+            # A degenerate quote (odds between -100 and +100, an underround for Shin, ...)
+            # must never abort a scan: skip this book and keep the others.
+            log.warning(
+                "%s: skipping %s %s for market %s: %s",
+                quote.bookmaker,
+                market.market_type,
+                outcome.name,
+                market.market_id,
+                exc,
+            )
+            continue
         samples.append((quote.bookmaker, float(devigged[0])))
     if not samples:
         return None
@@ -514,6 +576,8 @@ def fair_for_outcome(
 
 
 __all__ = [
+    "DIFFERENT_GAME_DAY",
+    "SERIES_WINDOW_HOURS",
     "TEAM_ALIASES",
     "fair_for_outcome",
     "match_games",

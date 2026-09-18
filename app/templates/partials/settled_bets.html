@@ -9,7 +9,7 @@
     {{ m.bet_head(v) }}
     <dl class="metrics metrics-4">
       <div><dt>Result</dt><dd><span class="badge {{ 'badge-good' if v.bet.status == 'won' else ('badge-bad' if v.bet.status == 'lost' else '') }}">{{ v.bet.status }}</span></dd></div>
-      <div><dt>P&amp;L</dt><dd class="{{ 'good' if (v.bet.pnl_usd or 0) > 0 else ('bad' if (v.bet.pnl_usd or 0) < 0 else '') }}">{{ v.bet.pnl_usd|usd }}</dd></div>
+      <div><dt>P&amp;L</dt><dd class="{{ 'good' if (v.bet.pnl_usd or 0) > 0 else ('bad' if (v.bet.pnl_usd or 0) < 0 else '') }}">{{ v.bet.pnl_usd|usd_signed }}</dd></div>
       <div><dt>CLV</dt><dd class="{{ 'good' if (v.bet.clv or 0) > 0 else ('bad' if (v.bet.clv or 0) < 0 else '') }}">{{ v.bet.clv|signed_pct }}</dd></div>
       <div><dt>Stake</dt><dd>{{ v.bet.stake_usd|usd }} @ {{ v.bet.price|cents }}</dd></div>
     </dl>

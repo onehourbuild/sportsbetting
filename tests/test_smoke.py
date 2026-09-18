@@ -91,7 +91,8 @@ def test_manifest_and_sw_served_without_auth(anon_client: TestClient) -> None:
     assert sw.status_code == 200
     assert sw.headers["content-type"].startswith("application/javascript")
     assert sw.headers["service-worker-allowed"] == "/"
-    assert "edges-v1" in sw.text
+    assert "edges-v2" in sw.text
+    assert "OFFLINE_HTML" in sw.text and "Network-only for pages" in sw.text
 
 
 def test_static_assets_served_without_auth(anon_client: TestClient) -> None:
@@ -109,13 +110,70 @@ def test_static_assets_served_without_auth(anon_client: TestClient) -> None:
         assert anon_client.get(path).status_code == 200, path
 
 
+STRONG_PASSWORD = "correct-horse-battery-staple"
+STRONG_SECRET = "f" * 64
+
+
 def test_settings_requires_password_outside_dev() -> None:
     import pytest
 
     with pytest.raises(ValueError, match="APP_PASSWORD"):
-        Settings(_env_file=None, app_env="prod", app_password="")  # type: ignore[call-arg]
-    ok = Settings(_env_file=None, app_env="prod", app_password="x")  # type: ignore[call-arg]
+        Settings(_env_file=None, app_env="prod", app_password="", secret_key=STRONG_SECRET)  # type: ignore[call-arg]
+    ok = Settings(
+        _env_file=None,  # type: ignore[call-arg]
+        app_env="prod",
+        app_password=STRONG_PASSWORD,
+        secret_key=STRONG_SECRET,
+    )
     assert ok.auth_enabled and ok.cookie_secure
+
+
+def test_settings_requires_a_long_password_outside_dev() -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="at least 12 characters"):
+        Settings(_env_file=None, app_env="prod", app_password="x", secret_key=STRONG_SECRET)  # type: ignore[call-arg]
+    with pytest.raises(ValueError, match="at least 12 characters"):
+        Settings(  # type: ignore[call-arg]
+            _env_file=None, app_env="prod", app_password="short-pw-11", secret_key=STRONG_SECRET
+        )
+    # dev keeps accepting anything (local only)
+    dev = Settings(_env_file=None, app_env="dev", app_password="x")  # type: ignore[call-arg]
+    assert dev.auth_enabled
+
+
+def test_settings_rejects_the_default_or_short_secret_key_outside_dev() -> None:
+    """The default SECRET_KEY is public: with it anyone can mint a valid session cookie."""
+    import pytest
+
+    with pytest.raises(ValueError, match="SECRET_KEY"):
+        Settings(_env_file=None, app_env="prod", app_password=STRONG_PASSWORD)  # type: ignore[call-arg]
+    with pytest.raises(ValueError, match="SECRET_KEY"):
+        Settings(  # type: ignore[call-arg]
+            _env_file=None,
+            app_env="prod",
+            app_password=STRONG_PASSWORD,
+            secret_key="dev-secret-change-me",
+        )
+    with pytest.raises(ValueError, match="at least 32 characters"):
+        Settings(  # type: ignore[call-arg]
+            _env_file=None,
+            app_env="prod",
+            app_password=STRONG_PASSWORD,
+            secret_key="only-thirty-one-characters-xxxx",
+        )
+    ok = Settings(  # type: ignore[call-arg]
+        _env_file=None,
+        app_env="prod",
+        app_password=STRONG_PASSWORD,
+        secret_key="a" * 32,
+    )
+    # SecretStr: the value is only readable through the accessor, never from repr()
+    assert ok.secret_key_value == "a" * 32
+    assert "a" * 32 not in repr(ok) and "a" * 32 not in str(ok.secret_key)
+    # dev still boots on the default key
+    dev = Settings(_env_file=None, app_env="dev")  # type: ignore[call-arg]
+    assert dev.secret_key_value == "dev-secret-change-me"
 
 
 def test_auth_disabled_in_dev_without_password(tmp_path) -> None:

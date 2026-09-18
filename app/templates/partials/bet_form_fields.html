@@ -10,14 +10,15 @@
       <div><dt>Edge</dt><dd class="good">{{ row.opp.edge|signed_pct }}</dd></div>
       <div><dt>Limit</dt><dd>{{ row.opp.limit_price|cents }}</dd></div>
     </dl>
+    {% if not row.opp.fill_complete %}<p class="small"><span class="badge badge-warn">partial fill</span> only {{ row.opp.fill_usd|usd }} fillable at {{ row.opp.fill_price|cents }} (suggested {{ row.opp.suggested_stake|usd }})</p>{% endif %}
   </div>
   {% if error %}<p class="alert alert-error" role="alert">{{ error }}</p>{% endif %}
   <label class="field"><span>Stake (USD) · suggested {{ row.opp.suggested_stake|usd }}</span>
     <input name="stake_usd" inputmode="decimal" value="{{ values.stake_usd }}" required autocomplete="off"></label>
   <label class="field"><span>Price (0–1) · ask {{ row.opp.ask|cents }}</span>
     <input name="price" inputmode="decimal" value="{{ values.price }}" required autocomplete="off"
-           data-price-taker="{{ '%.2f'|format(row.opp.ask) }}"
-           data-price-maker="{{ '%.2f'|format(row.opp.limit_price) if row.opp.limit_price is not none else '' }}"></label>
+           data-price-taker="{{ prices.taker }}"
+           data-price-maker="{{ prices.maker }}"></label>
   <fieldset class="field radio-group">
     <legend>Mode</legend>
     <label class="radio"><input type="radio" name="mode" value="taker"{% if values.mode != 'maker' %} checked{% endif %}>

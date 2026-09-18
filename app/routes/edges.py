@@ -47,6 +47,30 @@ def app_settings(request: Request) -> Settings:
     return settings if settings is not None else get_settings()
 
 
+def get_now() -> datetime:
+    """The request clock, as a FastAPI dependency.
+
+    Every page that renders an age ("last scan 4m ago") or an age-derived badge (the
+    stale-book badge on the game page) reads the clock through this dependency, so a test
+    can freeze it with `app.dependency_overrides[get_now]` and assert the rendered text
+    instead of asserting nothing time-derived at all.
+    """
+    return datetime.now(UTC)
+
+
+def scan_busy_error() -> type[BaseException] | None:
+    """`scan.ScanBusy` if the services layer exposes it yet, else None.
+
+    A scan already in flight is a normal outcome ("try again in a moment"), not a failure:
+    the route renders it as a plain toast. Looked up at call time because `app/services/scan.py`
+    belongs to another owner and the symbol may arrive after this module is imported.
+    """
+    cls = getattr(scan_service, "ScanBusy", None)
+    if isinstance(cls, type) and issubclass(cls, BaseException):
+        return cls
+    return None
+
+
 def normalize_league(value: str | None) -> str:
     league = (value or "all").strip().lower()
     return league if league in LEAGUE_FILTERS else "all"
@@ -248,7 +272,9 @@ def safe_books_cost(prefs: Prefs) -> int | None:
         return None
 
 
-def scan_context(request: Request, session: Session, prefs: Prefs) -> dict[str, Any]:
+def scan_context(
+    request: Request, session: Session, prefs: Prefs, now: datetime | None = None
+) -> dict[str, Any]:
     """Everything the scan bar / status partial needs."""
     settings = app_settings(request)
     return {
@@ -257,7 +283,7 @@ def scan_context(request: Request, session: Session, prefs: Prefs) -> dict[str, 
         "books_cost": safe_books_cost(prefs),
         "has_odds_key": bool(settings.odds_api_key),
         "demo_mode": bool(settings.demo_mode),
-        "now": datetime.now(UTC),
+        "now": now if now is not None else datetime.now(UTC),
     }
 
 
@@ -267,6 +293,7 @@ def edges_context(
     league: str,
     toast: str | None = None,
     toast_error: bool = False,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     prefs = prefs_service.get_prefs(session)
     scan = latest_ok_scan(session)
@@ -280,7 +307,7 @@ def edges_context(
         "toast_message": toast,
         "toast_error": toast_error,
     }
-    context.update(scan_context(request, session, prefs))
+    context.update(scan_context(request, session, prefs, now))
     return context
 
 
@@ -310,26 +337,42 @@ def scan_summary(result: Any) -> str:
 
 @router.get("/", response_class=HTMLResponse)
 async def edges_home(
-    request: Request, league: str = "all", session: Session = Depends(get_session)
+    request: Request,
+    league: str = "all",
+    session: Session = Depends(get_session),
+    now: datetime = Depends(get_now),
 ) -> HTMLResponse:
-    context = edges_context(request, session, normalize_league(league))
+    context = edges_context(request, session, normalize_league(league), now=now)
     return templates.TemplateResponse(request, "edges.html", context)
 
 
 @router.post("/scan", response_class=HTMLResponse)
-async def run_scan(
+def run_scan(
     request: Request,
     kind: str = "poly",
     league: str = "all",
     session: Session = Depends(get_session),
+    now: datetime = Depends(get_now),
 ) -> HTMLResponse:
     """Run a scan; respond with the refreshed list + an out-of-band toast (always HTTP 200
-    so htmx swaps the toast in on failure too)."""
+    so htmx swaps the toast in on failure too).
+
+    A plain `def` on purpose: `run_scan_default` is synchronous (blocking httpx) and takes
+    seconds, so FastAPI runs this handler in the threadpool and the event loop keeps serving
+    the rest of the app while a scan runs. As an `async def` it blocked every other request
+    for the whole scan and the phone looked hung. The request's Session stays inside this
+    one handler, so it is never touched from two threads at once.
+    """
     league = normalize_league(league)
     kind = (kind or "").strip().lower()
     if kind not in SCAN_KINDS:
         context = edges_context(
-            request, session, league, toast=f"Unknown scan kind '{kind}'.", toast_error=True
+            request,
+            session,
+            league,
+            toast=f"Unknown scan kind '{kind}'.",
+            toast_error=True,
+            now=now,
         )
         return templates.TemplateResponse(request, "partials/scan_result.html", context)
 
@@ -338,16 +381,29 @@ async def run_scan(
     try:
         result = scan_service.run_scan_default(session, kind, leagues=leagues)
     except Exception as exc:  # noqa: BLE001 - surfaced to the owner as a toast
+        busy = scan_busy_error()
+        if busy is not None and isinstance(exc, busy):
+            # Not an error: the other button (or the scheduler) is already scanning.
+            log.info("scan refused, already running (kind=%s)", kind)
+            context = edges_context(
+                request,
+                session,
+                league,
+                toast=str(exc) or "A scan is already running.",
+                toast_error=False,
+                now=now,
+            )
+            return templates.TemplateResponse(request, "partials/scan_result.html", context)
         log.exception("scan failed (kind=%s)", kind)
         detail = str(exc) or type(exc).__name__
         context = edges_context(
-            request, session, league, toast=f"Scan failed: {detail}", toast_error=True
+            request, session, league, toast=f"Scan failed: {detail}", toast_error=True, now=now
         )
         return templates.TemplateResponse(request, "partials/scan_result.html", context)
 
     has_errors = bool(getattr(result, "errors", None))
     context = edges_context(
-        request, session, league, toast=scan_summary(result), toast_error=has_errors
+        request, session, league, toast=scan_summary(result), toast_error=has_errors, now=now
     )
     return templates.TemplateResponse(request, "partials/scan_result.html", context)
 

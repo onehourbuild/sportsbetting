@@ -220,6 +220,9 @@ def _validate_leagues(raw: Any) -> list[str]:
         raise ValueError(
             f"leagues_enabled may only contain {', '.join(LEAGUES)}; got {', '.join(unknown)}"
         )
+    if not items:
+        # Every league off would make every scan a silent no-op.
+        raise ValueError("leagues_enabled must contain at least one league")
     return [league for league in LEAGUES if league in items]
 
 

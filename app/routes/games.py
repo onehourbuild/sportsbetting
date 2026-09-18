@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
@@ -19,6 +19,7 @@ from app.db import get_session
 from app.models import BookQuote, Game, Market, Opportunity, PmQuote
 from app.routes.edges import (
     fmt_line,
+    get_now,
     iso_utc,
     latest_ok_scan,
     market_label,
@@ -300,7 +301,10 @@ def build_market_views(session: Session, game: Game, now: datetime) -> list[Mark
 
 @router.get("/games/{game_id}", response_class=HTMLResponse)
 async def game_detail(
-    request: Request, game_id: int, session: Session = Depends(get_session)
+    request: Request,
+    game_id: int,
+    session: Session = Depends(get_session),
+    now: datetime = Depends(get_now),
 ) -> HTMLResponse:
     game = session.get(Game, game_id)
     if game is None:
@@ -310,7 +314,6 @@ async def game_detail(
             {"what": f"Game {game_id}", "hint": "It may not have been scanned yet."},
             status_code=404,
         )
-    now = datetime.now(UTC)
     context = {
         "game": game,
         "start_iso": iso_utc(game.start_time) or "",

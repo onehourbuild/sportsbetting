@@ -149,18 +149,37 @@ def parse_quota(headers: Mapping[str, str] | None) -> QuotaInfo:
 # --------------------------------------------------------------------------- client
 
 
+def plain_api_key(value: Any) -> str:
+    """The key as text.
+
+    Accepts a `pydantic.SecretStr` (how `Settings` stores `ODDS_API_KEY`) without importing
+    pydantic here, so a `SecretStr` can never reach the query string, where it would be sent
+    as its `**********` placeholder.
+    """
+    if value is None:
+        return ""
+    reveal = getattr(value, "get_secret_value", None)
+    if callable(reveal):
+        return str(reveal())
+    return str(value)
+
+
 class OddsApiClient:
     def __init__(
         self,
         transport: Transport,
-        api_key: str,
+        api_key: str | Any,
         base: str = DEFAULT_BASE,
         team_resolver: TeamResolver | None = None,
     ) -> None:
         self.transport = transport
-        self.api_key = api_key or ""
+        self.api_key = plain_api_key(api_key)
         self.base = base.rstrip("/")
         self._team_resolver: TeamResolver = team_resolver or _default_team_resolver
+        # Raw team labels the resolver could not name, as {league, name}; the scan copies
+        # them into Scan.notes so a renamed team shows up on Diagnostics instead of as a
+        # silent "no book game".
+        self.unresolved_teams: list[dict[str, str]] = []
 
     def __repr__(self) -> str:
         state = "set" if self.api_key else "unset"
@@ -251,6 +270,12 @@ class OddsApiClient:
             log.exception("team resolver failed for %r (%s)", name, league)
             return None
 
+    def _note_unresolved(self, league: League, name: str) -> None:
+        entry = {"league": str(league), "name": name, "source": "oddsapi"}
+        if entry not in self.unresolved_teams:
+            log.warning("Odds API %s: unresolved team %r", league, name)
+            self.unresolved_teams.append(entry)
+
     def _parse_games(self, payload: Any, league: League, url: str) -> list[BookGame]:
         if isinstance(payload, dict) and "message" in payload:
             raise OddsApiError(
@@ -286,15 +311,9 @@ class OddsApiClient:
             return None
         home_key = self._resolve(home_name, league) or ""
         away_key = self._resolve(away_name, league) or ""
-        if not home_key or not away_key:
-            log.debug(
-                "Odds API %s: unresolved team(s) for %s vs %s (home=%r away=%r)",
-                league,
-                away_name,
-                home_name,
-                home_key,
-                away_key,
-            )
+        for name, key in ((home_name, home_key), (away_name, away_key)):
+            if not key:
+                self._note_unresolved(league, name)
         books: list[BookQuote] = []
         raw_books = raw.get("bookmakers")
         for raw_book in raw_books if isinstance(raw_books, list) else []:
@@ -379,6 +398,7 @@ __all__ = [
     "OddsApiClient",
     "OddsApiError",
     "parse_iso_utc",
+    "plain_api_key",
     "parse_quota",
     "to_american",
     "to_float",

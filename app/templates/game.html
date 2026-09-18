@@ -9,9 +9,10 @@
     <span class="badge">{{ game.status }}</span>
   </div>
   <h1 class="game-title">{{ game.away_name or game.away_key }} <span class="muted">@</span> {{ game.home_name or game.home_key }}</h1>
+  <p class="muted small">home/away assumed from Polymarket's outcome order (unverified; matching is order-insensitive)</p>
   <p class="muted">
     <time datetime="{{ start_iso }}" data-local>{{ game.start_time|dt_short }}</time>
-    {% if game.start_time %}<span aria-hidden="true">·</span> {{ game.start_time|ago }}{% endif %}
+    {% if game.start_time %}<span aria-hidden="true">·</span> {{ game.start_time|ago(now) }}{% endif %}
   </p>
   <div class="row">
     {% if pm_url %}<a class="btn btn-sm" href="{{ pm_url }}" target="_blank" rel="noopener noreferrer">Open on Polymarket</a>{% endif %}
@@ -29,7 +30,7 @@
     {% if mv.market.closed %}<span class="badge">closed</span>{% endif %}
     {% if not mv.market.accepting_orders and not mv.market.closed %}<span class="badge badge-warn">paused</span>{% endif %}
   </h2>
-  <p class="muted small mono">liq {{ mv.market.liquidity|usd(0) }} · vol {{ mv.market.volume|usd(0) }} · tick {{ mv.market.tick_size if mv.market.tick_size is not none else '—' }}</p>
+  <p class="muted small mono">liq {{ mv.market.liquidity|usd(0) }} · vol {{ mv.market.volume|usd(0) }} · tick {{ mv.market.tick_size|cents }}</p>
 
   <div class="outcomes">
     {% for o in mv.outcomes %}
@@ -46,7 +47,7 @@
         <div><dt>Ask</dt><dd>{{ o.quote.best_ask|cents }}</dd></div>
         <div><dt>Mid</dt><dd>{{ o.quote.mid|cents }}</dd></div>
       </dl>
-      <p class="muted small">quote {{ o.quote.fetched_at|ago }}</p>
+      <p class="muted small">quote {{ o.quote.fetched_at|ago(now) }}</p>
       {% else %}
       <p class="muted small">No Polymarket quote stored.</p>
       {% endif %}
@@ -55,13 +56,15 @@
       <dl class="metrics metrics-4">
         <div><dt>Fair</dt><dd>{{ o.opp.fair_prob|pct }}</dd></div>
         <div><dt>EV</dt><dd>{{ o.opp.ev_per_dollar|signed_pct }}</dd></div>
-        <div><dt>Stake</dt><dd>{{ o.opp.suggested_stake|usd }}</dd></div>
+        <div><dt>Stake</dt><dd>{% if o.opp.suggested_stake %}{{ o.opp.suggested_stake|usd }}{% else %}—{% endif %}</dd></div>
         <div><dt>Books</dt><dd>{{ o.opp.n_books }}</dd></div>
         <div><dt>Cost</dt><dd>{{ o.opp.effective_price|cents }}</dd></div>
         <div><dt>Fill</dt><dd>{{ o.opp.fill_price|cents }}</dd></div>
         <div><dt>Limit</dt><dd>{{ o.opp.limit_price|cents }}</dd></div>
         <div><dt>Method</dt><dd>{{ o.opp.fair_method }}</dd></div>
       </dl>
+      {% if not o.opp.fill_complete %}<p class="small"><span class="badge badge-warn">partial fill</span> only {{ o.opp.fill_usd|usd }} fillable at {{ o.opp.fill_price|cents }}</p>{% endif %}
+      {% if o.opp.stake_note %}<p class="small muted stake-note">stake: {{ o.opp.stake_note }}</p>{% endif %}
       <button class="btn btn-primary btn-sm" type="button"
               hx-get="/bets/new?opportunity_id={{ o.opp.id }}" hx-target="#sheet" hx-swap="innerHTML">Log bet</button>
       {% else %}

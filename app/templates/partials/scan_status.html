@@ -3,7 +3,7 @@
   <div class="scanbar-row">
     <span class="scan-when">
       {% if last_scan %}
-        Last scan <time datetime="{{ last_scan.started_at.isoformat() }}">{{ last_scan.started_at|ago }}</time>
+        Last scan <time datetime="{{ last_scan.started_at.isoformat() }}">{{ last_scan.started_at|ago(now) }}</time>
         {% if last_scan.ok %}<span class="badge">{{ last_scan.kind }}</span>{% else %}<span class="badge badge-bad">failed</span>{% endif %}
       {% else %}
         <span class="muted">No scan yet</span>
@@ -11,13 +11,15 @@
     </span>
     <span class="scan-quota">{{ m.quota_badge(quota, has_odds_key, demo_mode) }}</span>
   </div>
+  {# Either button disables BOTH until the response settles: a second scan queued behind
+     the first spends Odds API credits twice (the server also refuses it with ScanBusy). #}
   <div class="scanbar-actions">
     <button class="btn btn-primary" type="button"
             hx-post="/scan?kind=poly&amp;league={{ league }}" hx-target="#edges-list" hx-swap="outerHTML"
-            hx-indicator="#scan-status" hx-disabled-elt="this">Refresh Polymarket</button>
+            hx-indicator="#scan-status" hx-disabled-elt="#scan-status button">Refresh Polymarket</button>
     <button class="btn" type="button"
             hx-post="/scan?kind=books&amp;league={{ league }}" hx-target="#edges-list" hx-swap="outerHTML"
-            hx-indicator="#scan-status" hx-disabled-elt="this"
+            hx-indicator="#scan-status" hx-disabled-elt="#scan-status button"
             hx-confirm="{% if books_cost is not none %}Refresh Books costs {{ books_cost }} Odds API credit{{ '' if books_cost == 1 else 's' }}{% if quota.remaining is not none %} ({{ quota.remaining }} left this month){% endif %}.{% else %}Refresh Books uses Odds API credits.{% endif %} Continue?">
       Refresh Books{% if books_cost is not none %} <span class="btn-note">(costs {{ books_cost }} credit{{ '' if books_cost == 1 else 's' }}{% if quota.remaining is not none %}, {{ quota.remaining }} left{% endif %})</span>{% endif %}
     </button>

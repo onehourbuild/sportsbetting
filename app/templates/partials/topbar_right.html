@@ -1,0 +1,7 @@
+{% import "partials/macros.html" as m %}
+{# The edges topbar: last-scan age + credit badge. Rendered inline by edges.html and
+   out-of-band by scan_result.html so a refresh never leaves a stale copy up top. #}
+<div id="topbar-right" class="topbar-right"{% if oob %} hx-swap-oob="true"{% endif %}>
+  {% if last_scan %}<span class="muted small">scan {{ last_scan.started_at|ago(now) }}</span>{% endif %}
+  {{ m.quota_badge(quota, has_odds_key, demo_mode, compact=true) }}
+</div>

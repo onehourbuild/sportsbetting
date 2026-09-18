@@ -81,13 +81,20 @@ async def diagnostics_page(
     pm_sample = session.scalars(select(PmQuote).order_by(PmQuote.id.desc()).limit(1)).first()
     book_sample = session.scalars(select(BookQuote).order_by(BookQuote.id.desc()).limit(1)).first()
     settings = app_settings(request)
+    shown_separately = ("unmatched", "unparseable", "conventions", "unresolved_book_teams")
+    conventions = notes.get("conventions")
     context = {
         "scans": scans,
         "latest": latest,
         "errors": scan_errors(latest),
         "unmatched": note_items(notes.get("unmatched")),
         "unparseable": note_items(notes.get("unparseable")),
-        "other_notes": {k: v for k, v in notes.items() if k not in ("unmatched", "unparseable")},
+        # Parser conventions the scan assumed (home/away order, match window, staleness)
+        # and book team labels the resolver could not name: both must be observable here
+        # because the live API formats are unverified (CLAUDE.md rule 4).
+        "conventions": conventions if isinstance(conventions, dict) else {},
+        "unresolved_teams": note_items(notes.get("unresolved_book_teams")),
+        "other_notes": {k: v for k, v in notes.items() if k not in shown_separately},
         "samples": [
             ("PmQuote", pm_sample, pretty_json(pm_sample)),
             ("BookQuote", book_sample, pretty_json(book_sample)),

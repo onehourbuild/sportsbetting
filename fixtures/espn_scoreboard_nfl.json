@@ -112,6 +112,8 @@
               },
               "details": "PHI -4.5",
               "overUnder": 44.5,
+              "overOdds": -110,
+              "underOdds": -110,
               "awayTeamOdds": {
                 "favorite": false,
                 "underdog": true,
@@ -242,6 +244,8 @@
               },
               "details": "KC -3.5",
               "overUnder": 47.5,
+              "overOdds": -110,
+              "underOdds": -110,
               "awayTeamOdds": {
                 "favorite": true,
                 "underdog": false,

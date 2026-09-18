@@ -807,11 +807,12 @@ def test_settle_bet_returns_ledger_and_toast(
     assert seen == [(slate["b_open"].id, "won")]
     html = response.text
     assert html.lstrip().startswith('<div id="ledger"')
-    assert "settled as won" in html and "+9.99" in html
+    assert "settled as won" in html and "P&amp;L +$9.99" in html  # same helper as the tiles
     assert "No open bets" in html and ">won<" in html
     bad = client.post(f"/bets/{slate['b_lost'].id}/settle", data={"result": "maybe"})
     assert bad.status_code == 200
-    assert "Result must be won, lost or void" in bad.text and 'class="toast error"' in bad.text
+    assert "Result must be won, lost, void or push" in bad.text
+    assert 'class="toast error"' in bad.text
     assert seen == [(slate["b_open"].id, "won")]
 
 

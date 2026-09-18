@@ -10,6 +10,10 @@ primary_region = "iad"
   DATABASE_URL = "sqlite:////data/app.db"
   PORT = "8080"
   APP_ENV = "prod"
+  # Fly's proxy overwrites this header on every request, so it is the one header that can
+  # be trusted for the login lockout's per-address counter. Empty (the default) trusts
+  # nothing but the socket peer, which behind Fly is the proxy itself.
+  TRUSTED_PROXY_HEADER = "fly-client-ip"
 
 [[mounts]]
   source = "data"
@@ -20,6 +24,9 @@ primary_region = "iad"
   force_https = true
   auto_stop_machines = "stop"
   auto_start_machines = true
+  # 0 = the machine sleeps when idle (cheapest). The in-process scheduler
+  # (SCHEDULER_POLY_MINUTES / SCHEDULER_BOOKS_HOURS) only runs while the machine is
+  # awake, so set this to 1 (~$2/month) if you rely on scheduled scans.
   min_machines_running = 0
 
 [[vm]]

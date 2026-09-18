@@ -23,9 +23,17 @@
   }
   window.toast = toast;
 
+  /* Lock page scrolling while the bottom sheet (aria-modal) has content. */
+  function syncSheetLock() {
+    var sheet = document.getElementById("sheet");
+    var open = !!(sheet && sheet.children.length > 0);
+    document.body.classList.toggle("sheet-open", open);
+  }
+
   function closeSheet() {
     var sheet = document.getElementById("sheet");
     if (sheet) sheet.innerHTML = "";
+    syncSheetLock();
   }
   window.closeSheet = closeSheet;
 
@@ -84,13 +92,33 @@
     var msg = xhr.getResponseHeader("X-Toast");
     if (msg) toast(msg, false);
   });
-  /* Server-rendered toasts arrive as an out-of-band swap of #toast; hide them after a moment. */
-  document.addEventListener("htmx:oobAfterSwap", function () { armToast(); });
+  /* Server-rendered toasts arrive as an out-of-band innerHTML swap INTO the persistent
+     #toast live region (never a replacement of the node, which screen readers would not
+     announce). Un-hide the region before its content changes, then apply the error tone
+     carried by the swapped <span data-error>. */
+  document.addEventListener("htmx:oobBeforeSwap", function (evt) {
+    var target = evt.detail && evt.detail.target;
+    if (target && target.id === "toast") target.hidden = false;
+  });
+  document.addEventListener("htmx:oobAfterSwap", function () {
+    var el = document.getElementById("toast");
+    if (el) {
+      var msg = el.querySelector(".toast-msg");
+      if (msg) {
+        el.classList.toggle("error", msg.getAttribute("data-error") === "1");
+        el.hidden = false;
+      }
+    }
+    armToast();
+  });
   document.addEventListener("htmx:afterSettle", function (evt) {
     armToast();
     localizeTimes(evt.target || document);
-    var focus = document.querySelector('#sheet input[name="stake_usd"]');
-    if (focus && evt.target && evt.target.id === "sheet") focus.focus();
+    if (evt.target && evt.target.id === "sheet") {
+      syncSheetLock();
+      var focus = document.querySelector('#sheet input[name="stake_usd"]');
+      if (focus) focus.focus();
+    }
   });
 
   document.addEventListener("DOMContentLoaded", function () { localizeTimes(document); });

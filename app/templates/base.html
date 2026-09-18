@@ -5,25 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>{% block title %}{{ app_name }}{% endblock %}</title>
   <meta name="description" content="Polymarket edge finder for NFL, NBA and MLB.">
-  <meta name="theme-color" content="#0b0f14">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f5f7fa">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b0f14">
   <meta name="color-scheme" content="dark light">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  {# "default" lets iOS colour the status bar from the theme-color metas above;
+     "black-translucent" painted WHITE text over the near-white light-mode topbar. #}
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Edges">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/static/icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon-180.png">
-  <link rel="stylesheet" href="/static/app.css">
-  <script src="/static/htmx.min.js" defer></script>
-  <script src="/static/app.js" defer></script>
+  <link rel="stylesheet" href="/static/app.css?v={{ app_version }}">
+  <script src="/static/htmx.min.js?v={{ app_version }}" defer></script>
+  <script src="/static/app.js?v={{ app_version }}" defer></script>
   {% block head %}{% endblock %}
 </head>
 <body hx-boost="false">
   <a class="skip-link" href="#main">Skip to content</a>
   <header class="topbar">
     <a class="brand" href="/">{{ app_name }}</a>
-    <div class="topbar-right">{% block topbar_right %}{% endblock %}</div>
+    {% block topbar %}<div id="topbar-right" class="topbar-right">{% block topbar_right %}{% endblock %}</div>{% endblock %}
   </header>
 
   <main id="main" class="page">

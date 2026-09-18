@@ -16,8 +16,12 @@
 {% if demo_mode %}<span class="badge badge-info" title="DEMO_MODE: synthetic fixture data">demo</span>{% endif %}
 {%- endmacro %}
 
+{# Swaps only the CONTENTS of the persistent #toast live region in base.html (innerHTML), so
+   screen readers announce the change; replacing the node (hx-swap-oob="true") would insert
+   a fresh region that is not read. app.js un-hides the region and applies .error from the
+   data-error flag. #}
 {% macro toast_oob(message, error=false) -%}
-{% if message %}<div id="toast" class="toast{% if error %} error{% endif %}" role="status" aria-live="polite" hx-swap-oob="true">{{ message }}</div>{% endif %}
+{% if message %}<div id="toast" class="toast{% if error %} error{% endif %}" role="status" aria-live="polite" hx-swap-oob="innerHTML"><span class="toast-msg" data-error="{{ '1' if error else '0' }}">{{ message }}</span></div>{% endif %}
 {%- endmacro %}
 
 {% macro opp_card(row) -%}
@@ -40,11 +44,15 @@
     <div><dt>Fair</dt><dd>{{ row.opp.fair_prob|pct }}</dd></div>
     <div><dt>Edge</dt><dd class="good">{{ row.opp.edge|signed_pct }}</dd></div>
     <div><dt>EV</dt><dd>{{ row.opp.ev_per_dollar|signed_pct }}</dd></div>
-    <div><dt>Stake</dt><dd>{{ row.opp.suggested_stake|usd }}</dd></div>
+    <div><dt>Stake</dt><dd>{% if row.opp.suggested_stake %}{{ row.opp.suggested_stake|usd }}{% else %}—{% endif %}</dd></div>
     <div><dt>Fill</dt><dd>{{ row.opp.fill_price|cents }}</dd></div>
     <div><dt>Limit</dt><dd>{{ row.opp.limit_price|cents }}</dd></div>
     <div><dt>Books</dt><dd>{{ row.opp.n_books }}</dd></div>
   </dl>
+  {% if not row.opp.fill_complete %}<p class="small"><span class="badge badge-warn">partial fill</span> the stored ask ladder absorbs only {{ row.opp.fill_usd|usd }} at {{ row.opp.fill_price|cents }}</p>{% endif %}
+  {# Why the stake is capped, or 0: sized off the ladder that still clears min_edge, or
+     below the exchange's minimum order. The edge itself is real either way. #}
+  {% if row.opp.stake_note %}<p class="small muted stake-note">stake: {{ row.opp.stake_note }}</p>{% endif %}
   <p class="muted small">cost incl. fee {{ row.opp.effective_price|cents }} · {{ row.opp.fair_method }} de-vig{% if row.opp.books_used %} · {{ row.opp.books_used|join(', ') }}{% endif %}</p>
   <div class="opp-actions">
     {% if row.polymarket_url %}

@@ -7,6 +7,7 @@ app.core.matching.
 from __future__ import annotations
 
 import json
+import logging
 import re
 from datetime import UTC, datetime
 
@@ -547,3 +548,24 @@ def test_parse_iso_utc(value, expected) -> None:
 )
 def test_to_american(value, expected) -> None:
     assert to_american(value) == expected
+
+
+# --------------------------------------------------------------------------- review fixes
+
+
+def test_unresolved_team_labels_are_recorded_and_logged(caplog: pytest.LogCaptureFixture) -> None:
+    """A renamed team must be visible on Diagnostics, not a silent 'no book game'."""
+
+    def partial(name: str, league: str) -> str | None:
+        return None if name == "Kansas City Chiefs" else dict_resolver(name, league)
+
+    client = make_client(resolver=partial)
+    with caplog.at_level(logging.WARNING, logger="app.clients.oddsapi"):
+        client.odds("nfl", BOOKS)
+    assert client.unresolved_teams == [
+        {"league": "nfl", "name": "Kansas City Chiefs", "source": "oddsapi"}
+    ]
+    assert any("unresolved team 'Kansas City Chiefs'" in r.getMessage() for r in caplog.records)
+    client.odds("nfl", BOOKS)  # the same label is recorded once per client, not per call
+    assert len(client.unresolved_teams) == 1
+    assert make_client().unresolved_teams == []

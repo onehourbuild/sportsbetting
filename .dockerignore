@@ -10,3 +10,6 @@ __pycache__
 *.db-journal
 data/
 node_modules/
+.coverage
+.coverage.*
+htmlcov/

@@ -251,6 +251,14 @@ class Opportunity(Base):
     kelly: Mapped[float] = mapped_column(Float, nullable=False)
     suggested_stake: Mapped[float] = mapped_column(Float, nullable=False)
     fill_price: Mapped[float | None] = mapped_column(Float)
+    # False when the stored ask ladder could not absorb suggested_stake; fill_usd is then
+    # the fee-inclusive dollars it could take at fill_price.
+    fill_complete: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    fill_usd: Mapped[float | None] = mapped_column(Float)
+    # Why suggested_stake is not the raw Kelly number (capped by the depth that still clears
+    # min_edge, or 0 because it would be under the market's minimum order size). NULL when
+    # there is nothing to explain. Backfilled on existing databases by add_missing_columns.
+    stake_note: Mapped[str | None] = mapped_column(String(80))
     limit_price: Mapped[float | None] = mapped_column(Float)
     computed_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False, default=utcnow)
 

@@ -96,6 +96,42 @@ def get_session() -> Generator[Session, None, None]:
 
 
 def init_db(engine: Engine) -> None:
+    """Create missing tables, then add any column a model has that the table lacks.
+
+    v1 has no Alembic; columns added after a database was first created (for example
+    `opportunities.fill_complete`) are appended with `ALTER TABLE ... ADD COLUMN`, which
+    both SQLite and PostgreSQL support. Columns are never dropped or retyped here.
+    """
     from app import models  # noqa: F401  (register tables on Base.metadata)
 
     Base.metadata.create_all(engine)
+    add_missing_columns(engine)
+
+
+def add_missing_columns(engine: Engine) -> list[str]:
+    """Append model columns missing from existing tables; returns "table.column" names."""
+    from sqlalchemy import inspect
+
+    inspector = inspect(engine)
+    existing_tables = set(inspector.get_table_names())
+    added: list[str] = []
+    with engine.begin() as connection:
+        for table in Base.metadata.sorted_tables:
+            if table.name not in existing_tables:
+                continue
+            present = {col["name"] for col in inspector.get_columns(table.name)}
+            for column in table.columns:
+                if column.name in present:
+                    continue
+                spec = column.type.compile(dialect=engine.dialect)
+                ddl = f'ALTER TABLE {table.name} ADD COLUMN "{column.name}" {spec}'
+                default = column.default.arg if column.default is not None else None
+                if not column.nullable and default is not None and not callable(default):
+                    if isinstance(default, bool):
+                        literal = "TRUE" if default else "FALSE"  # SQLite >= 3.23 and PostgreSQL
+                    else:
+                        literal = repr(default)
+                    ddl += f" NOT NULL DEFAULT {literal}"
+                connection.exec_driver_sql(ddl)
+                added.append(f"{table.name}.{column.name}")
+    return added

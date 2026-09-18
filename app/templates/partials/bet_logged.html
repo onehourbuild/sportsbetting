@@ -1,7 +1,7 @@
 {% import "partials/macros.html" as m %}
 <div class="logged stack">
   <p class="alert alert-ok" role="status">Logged <strong>{{ bet.stake_usd|usd }}</strong> on <strong>{{ bet.outcome_name }}</strong>
-    @ {{ bet.price|cents }} ({{ bet.mode }}) · {{ '%.2f'|format(bet.shares) }} shares{% if bet.fee_usd %} · fee {{ bet.fee_usd|usd }}{% endif %}.</p>
+    @ {{ bet.price|cents }} ({{ bet.mode }}) · {{ '%.1f'|format(bet.shares) }} shares{% if bet.fee_usd %} · fee {{ bet.fee_usd|usd }}{% endif %}.</p>
   <div class="row">
     <a class="btn btn-primary" href="/bets">Open ledger</a>
     <button type="button" class="btn" data-close-sheet>Done</button>

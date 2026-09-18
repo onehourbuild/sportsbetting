@@ -1,10 +1,7 @@
 {% extends "base.html" %}
 {% import "partials/macros.html" as m %}
 {% block title %}Edges · {{ app_name }}{% endblock %}
-{% block topbar_right %}
-  {% if last_scan %}<span class="muted small">scan {{ last_scan.started_at|ago }}</span>{% endif %}
-  {{ m.quota_badge(quota, has_odds_key, demo_mode, compact=true) }}
-{% endblock %}
+{% block topbar %}{% include "partials/topbar_right.html" %}{% endblock %}
 {% block content %}
 <h1 class="page-title">Edges</h1>
 {% include "partials/scan_status.html" %}

@@ -1,4 +1,4 @@
 {% import "partials/macros.html" as m %}
 {% include "partials/edges_list.html" %}
-{% with oob = true %}{% include "partials/scan_status.html" %}{% endwith %}
+{% with oob = true %}{% include "partials/scan_status.html" %}{% include "partials/topbar_right.html" %}{% endwith %}
 {{ m.toast_oob(toast_message, toast_error) }}

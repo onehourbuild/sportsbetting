@@ -12,7 +12,7 @@
   <div class="stat"><span class="stat-label">Scheduler</span><span class="stat-value">poly {{ scheduler_poly_minutes }}m · books {{ scheduler_books_hours }}h</span></div>
   <div class="stat"><span class="stat-label">Rows</span><span class="stat-value">{{ counts.games }} games · {{ counts.markets }} markets · {{ counts.opportunities }} opps · {{ counts.bets }} bets</span></div>
   <div class="stat"><span class="stat-label">Quotes</span><span class="stat-value">{{ counts.pm_quotes }} pm · {{ counts.book_quotes }} book</span></div>
-  <p class="small"><a href="/healthz">/healthz</a></p>
+  <p class="row"><a class="btn btn-sm" href="/healthz">/healthz</a></p>
 </section>
 
 <section class="card">
@@ -73,6 +73,35 @@
       {% if item.reason %}<span class="badge badge-bad">{{ item.reason }}</span>{% endif %}
       {% for k, v in item.fields %}<span class="kv"><span class="muted">{{ k }}</span> <span class="mono">{{ v }}</span></span>{% endfor %}
     </li>
+    {% endfor %}
+  </ul>
+  {% else %}<p class="muted small">None.</p>{% endif %}
+
+  <h3 class="sub">Conventions in force</h3>
+  {% if conventions %}
+  <ul class="diag-list">
+    <li><span class="kv"><span class="muted">home/away</span> <span class="mono">{{ conventions.home_away }}</span></span></li>
+    <li><span class="kv"><span class="muted">match_window_hours</span> <span class="mono">{{ conventions.match_window_hours }}</span></span>
+        <span class="kv"><span class="muted">stale_book_minutes</span> <span class="mono">{{ conventions.stale_book_minutes }}</span></span></li>
+    {# A market quoting its own taker fee overrides the preference, so a rejected one
+       (outside the plausible band) changes every edge on that market. #}
+    {% for o in conventions.taker_fee_overrides or [] %}
+    <li><span class="kv"><span class="muted">fee override</span> <span class="mono">{{ o.league }} {{ o.market_id }}</span></span>
+        <span class="kv"><span class="muted">raw</span> <span class="mono">{{ o.raw }}</span></span>
+        <span class="kv"><span class="muted">used</span> <span class="mono">{% if o.rate is not none %}{{ o.rate }}{% else %}rejected — preference used{% endif %}</span></span></li>
+    {% endfor %}
+    {% if conventions.events_filters_dropped %}
+    <li><span class="badge badge-warn">events filters dropped</span> <span class="muted small">Gamma rejected the order/type filters, so the event list is unordered and unfiltered.</span></li>
+    {% endif %}
+  </ul>
+  {% else %}<p class="muted small">Not recorded by this scan.</p>{% endif %}
+
+  <h3 class="sub">Unresolved book teams ({{ unresolved_teams|length }})</h3>
+  {% if unresolved_teams %}
+  <p class="muted small">Team labels from the Odds API / ESPN that the alias table could not name; their games show as "no book game" until <code>app/core/matching.py</code> learns the label.</p>
+  <ul class="diag-list">
+    {% for item in unresolved_teams %}
+    <li>{% for k, v in item.fields %}<span class="kv"><span class="muted">{{ k }}</span> <span class="mono">{{ v }}</span></span>{% endfor %}</li>
     {% endfor %}
   </ul>
   {% else %}<p class="muted small">None.</p>{% endif %}

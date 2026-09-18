@@ -65,6 +65,17 @@ _FUTURES = re.compile(
     r"playoffs|series|cup|mvp)\b",
     re.IGNORECASE,
 )
+# A series / round winner titled like a game ("NBA Finals: Thunder vs. Pacers",
+# "World Series: Yankees vs. Dodgers", "Yankees vs. Dodgers - ALDS") is not a game unless
+# a specific game is named ("World Series Game 3: ..."). Only consulted when Gamma sends
+# no `sportsMarketType`, i.e. when the question text is all we have. "Championship" and
+# "Super Bowl" are single games in the NFL and stay eligible.
+_SERIES = re.compile(
+    r"\b(?:finals|semi-?finals?|series|playoffs?|wild\s*card|best[\s-]of|"
+    r"[an]l[dc]s|[an]lwc)\b",
+    re.IGNORECASE,
+)
+_GAME_NUMBER = re.compile(r"\bgame\s+\d+\b", re.IGNORECASE)
 
 _SPREAD_HINT = re.compile(r"\bspreads?\b|\bhandicap\b|\bcovers?\b|\brun\s?line\b|\bpuck\s?line\b")
 _TOTAL_HINT = re.compile(
@@ -101,6 +112,8 @@ def parse_market_type(sports_market_type: str | None, question: str) -> MarketTy
     lowered = text.lower()
     if not lowered:
         return None
+    if _SERIES.search(lowered) and not _GAME_NUMBER.search(lowered):
+        return None  # series / round winner, not a full-game market
     if _SPREAD_HINT.search(lowered):
         return "spread"
     if _TOTAL_HINT.search(lowered):

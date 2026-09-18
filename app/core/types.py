@@ -148,9 +148,12 @@ class Opportunity:
     suggested_stake: float  # USD after kelly_fraction and cap
     fill_price: float | None  # avg effective price if suggested_stake walks the asks
     fill_complete: bool
-    limit_price: float | None  # maker price that still clears min_edge (fee 0)
+    limit_price: float | None  # resting maker price (fee 0) that still clears min_edge
     book_game: BookGame | None
     computed_at: datetime
+    # USD (fee inclusive) the stored ask ladder can absorb when the walk is incomplete;
+    # None when the suggested stake fills completely. Additive to the contract.
+    fill_usd: float | None = None
 
 
 @dataclass(frozen=True)

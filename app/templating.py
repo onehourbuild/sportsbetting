@@ -40,6 +40,16 @@ def usd(value: Any, digits: int = 2) -> str:
     return f"{sign}${abs(number):,.{digits}f}"
 
 
+def usd_signed(value: Any, digits: int = 2) -> str:
+    """P&L style: 4.5 -> '+$4.50'; -4.5 -> '-$4.50'; 0 -> '$0.00'."""
+    number = _num(value)
+    if number is None:
+        return DASH
+    if number > 0:
+        return f"+${number:,.{digits}f}"
+    return usd(number, digits)
+
+
 def american(value: Any) -> str:
     """130 -> '+130'; -150 -> '-150'."""
     number = _num(value)
@@ -104,6 +114,7 @@ def dt_short(value: Any) -> str:
 FILTERS = {
     "pct": pct,
     "usd": usd,
+    "usd_signed": usd_signed,
     "american": american,
     "ago": ago,
     "cents": cents,
@@ -127,4 +138,14 @@ def create_templates(directory: Path | str = TEMPLATES_DIR) -> Jinja2Templates:
 
 templates = create_templates()
 
-__all__ = ["FILTERS", "ago", "american", "cents", "create_templates", "pct", "templates", "usd"]
+__all__ = [
+    "FILTERS",
+    "ago",
+    "american",
+    "cents",
+    "create_templates",
+    "pct",
+    "templates",
+    "usd",
+    "usd_signed",
+]

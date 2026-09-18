@@ -12,6 +12,7 @@ docs/ARCHITECTURE.md; once the real module lands these tests run against it unch
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 
@@ -19,6 +20,7 @@ import pytest
 
 from app.core import odds_math
 from app.core.matching import (
+    DIFFERENT_GAME_DAY,
     TEAM_ALIASES,
     fair_for_outcome,
     match_games,
@@ -1159,6 +1161,107 @@ class TestMatchGames:
         assert len(unmatched_reasons(list(markets.values()), [])) == len(markets)
 
 
+# ------------------------------------------------- review round 2: series games (MLB / NBA)
+
+
+class TestSeriesWindow:
+    """MLB and NBA play the same opponent on consecutive days and books post the next day's
+    MLB lines late, so a 36 h window happily priced Polymarket's game N+1 against the book's
+    game N (different starting pitchers) and then stored those lines under the wrong game."""
+
+    GAME_N = datetime(2026, 9, 19, 20, 10, tzinfo=UTC)  # 16:10 ET on the 19th
+    GAME_N1 = datetime(2026, 9, 20, 17, 35, tzinfo=UTC)  # 13:35 ET on the 20th
+
+    def _yankees_at_dodgers(self, market_id: str, start: datetime) -> PmMarket:
+        return pm_market(
+            market_id,
+            "mlb",
+            "moneyline",
+            ["Yankees", "Dodgers"],
+            start=start,
+            home="LAD",
+            away="NYY",
+        )
+
+    def _book(self, game_id: str, commence: datetime) -> BookGame:
+        return book_game(
+            game_id,
+            "mlb",
+            commence,
+            "Los Angeles Dodgers",
+            "New York Yankees",
+            slate_book_games()[4].books,
+        )
+
+    def test_the_next_day_of_a_series_never_matches_yesterdays_lines(self) -> None:
+        tomorrow = self._yankees_at_dodgers("500801", self.GAME_N1)
+        today_only = [self._book("n1", self.GAME_N)]
+        assert abs(self.GAME_N1 - self.GAME_N) < timedelta(hours=36)  # the old window matched
+        assert match_games([tomorrow], today_only) == {}
+        reasons = unmatched_reasons([tomorrow], today_only)
+        assert [r["market_id"] for r in reasons] == ["500801"]
+        assert reasons[0]["reason"] == DIFFERENT_GAME_DAY
+
+    def test_each_game_of_the_series_still_matches_its_own_lines(self) -> None:
+        tonight = self._yankees_at_dodgers("500801", self.GAME_N)
+        tomorrow = self._yankees_at_dodgers("500802", self.GAME_N1)
+        books = [self._book("n", self.GAME_N), self._book("n1", self.GAME_N1)]
+        matched = match_games([tonight, tomorrow], books)
+        assert matched["500801"].game_id == "n"
+        assert matched["500802"].game_id == "n1"
+
+    def test_a_day_night_pair_on_the_same_eastern_date_still_matches(self) -> None:
+        """A 13:05 ET first pitch and a 20:10 ET one are seven hours apart but the same game
+        day; only the calendar rolling over means a different game."""
+        day_game = datetime(2026, 9, 20, 17, 5, tzinfo=UTC)  # 13:05 ET on the 20th
+        night_lines = datetime(2026, 9, 21, 0, 10, tzinfo=UTC)  # 20:10 ET on the 20th
+        market = self._yankees_at_dodgers("500803", day_game)
+        late = self._book("late", night_lines)
+        assert night_lines - day_game > timedelta(hours=6)
+        assert match_games([market], [late]) == {"500803": late}
+
+    def test_the_nba_back_to_back_is_tightened_too(self) -> None:
+        tip_off = datetime(2026, 10, 22, 23, 30, tzinfo=UTC)
+        next_night = tip_off + timedelta(days=1)
+        market = pm_market(
+            "500804",
+            "nba",
+            "moneyline",
+            ["Lakers", "Celtics"],
+            start=next_night,
+            home="BOS",
+            away="LAL",
+        )
+        yesterday = book_game("y", "nba", tip_off, "Boston Celtics", "Los Angeles Lakers")
+        assert match_games([market], [yesterday]) == {}
+        assert unmatched_reasons([market], [yesterday])[0]["reason"] == DIFFERENT_GAME_DAY
+
+    def test_nfl_keeps_the_wide_window(self) -> None:
+        """One meeting a season and lines posted days ahead: 21 h of drift is still the game."""
+        game = slate_book_games()[0]
+        market = pm_market(
+            "500805",
+            "nfl",
+            "moneyline",
+            ["Chiefs", "Bills"],
+            start=T_KC_BUF + timedelta(hours=21),
+            home="BUF",
+            away="KC",
+        )
+        assert match_games([market], [game]) == {"500805": game}
+
+    def test_the_caller_can_still_narrow_the_window_but_not_widen_it(self) -> None:
+        tomorrow = self._yankees_at_dodgers("500806", self.GAME_N1)
+        today_only = [self._book("n1", self.GAME_N)]
+        assert match_games([tomorrow], today_only, window_hours=72) == {}
+        near = self._yankees_at_dodgers("500807", self.GAME_N + timedelta(hours=3))
+        assert match_games([near], today_only) == {"500807": today_only[0]}
+        assert match_games([near], today_only, window_hours=1) == {}
+        assert unmatched_reasons([near], today_only, window_hours=1)[0]["reason"] == (
+            "outside match window"
+        )
+
+
 # --------------------------------------------------------------------------- fair_for_outcome
 
 W = {"pinnacle": 3.0, "betonlineag": 1.5, "lowvig": 1.5, "draftkings": 1.0, "fanduel": 1.0}
@@ -1592,3 +1695,71 @@ class TestFairTotal:
             "9", "nfl", "total", ["Yes", "No"], start=T_KC_BUF, home="BUF", away="KC", line=47.5
         )
         assert fair_for_outcome(yes_no, 0, games[0], W) is None
+
+
+# --------------------------------------------------------------------------- review fixes
+
+
+class TestDegenerateQuotesAreSkippedPerBook:
+    def test_a_bad_moneyline_quote_skips_only_that_book(
+        self, slate, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        markets, _ = slate
+        game = book_game(
+            "a" * 32,
+            "nfl",
+            T_KC_BUF,
+            "Buffalo Bills",
+            "Kansas City Chiefs",
+            [
+                book_quote(
+                    "pinnacle", "nfl", h2h=[("Kansas City Chiefs", -150), ("Buffalo Bills", 130)]
+                ),
+                # odds strictly between -100 and +100 are not American odds: ValueError
+                book_quote(
+                    "draftkings", "nfl", h2h=[("Kansas City Chiefs", -50), ("Buffalo Bills", 50)]
+                ),
+            ],
+        )
+        with caplog.at_level(logging.WARNING, logger="app.core.matching"):
+            fair = fair_for_outcome(markets["kc_buf_ml"], 0, game, W)
+        assert fair is not None
+        assert fair.n_books == 1 and fair.books_used == ("pinnacle",)
+        assert fair.value == pytest.approx(0.583983, abs=TOL)
+        assert any(
+            "draftkings" in r.getMessage() and "skipping" in r.getMessage() for r in caplog.records
+        )
+
+    def test_shin_skips_an_underround_pair_beside_a_normal_book(
+        self, slate, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        markets, _ = slate
+        game = book_game(
+            "a" * 32,
+            "nfl",
+            T_KC_BUF,
+            "Buffalo Bills",
+            "Kansas City Chiefs",
+            [
+                book_quote(
+                    "pinnacle", "nfl", h2h=[("Kansas City Chiefs", -150), ("Buffalo Bills", 130)]
+                ),
+                # +105 / +105 sums to less than one: Shin's model has no solution
+                book_quote(
+                    "lowvig", "nfl", h2h=[("Kansas City Chiefs", 105), ("Buffalo Bills", 105)]
+                ),
+            ],
+        )
+        with caplog.at_level(logging.WARNING, logger="app.core.matching"):
+            fair = fair_for_outcome(markets["kc_buf_ml"], 0, game, W, method="shin")
+        assert fair is not None and fair.books_used == ("pinnacle",)
+        assert fair.value == pytest.approx(0.582609, abs=TOL)  # shin == additive for two-way
+        assert any(
+            "lowvig" in r.getMessage() and "skipping" in r.getMessage() for r in caplog.records
+        )
+        # power handles the underround, so the same book is kept there
+        power = fair_for_outcome(markets["kc_buf_ml"], 0, game, W, method="power")
+        assert power is not None and set(power.books_used) == {"pinnacle", "lowvig"}
+        # a wrong method is a configuration bug, never swallowed
+        with pytest.raises(ValueError):
+            fair_for_outcome(markets["kc_buf_ml"], 0, game, W, method="astrology")

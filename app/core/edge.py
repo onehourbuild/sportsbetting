@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
-from datetime import datetime
+from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from app.core.types import (
     BookGame,
@@ -23,6 +24,14 @@ from app.core.types import (
 
 DEFAULT_TICK = 0.01
 STAKE_DECIMALS = 2  # stakes are quoted to the cent
+MIN_STAKE = 1.0  # a suggestion below a dollar is noise, not a bet
+EDGE_EPS = 1e-12  # float slack when comparing an edge with min_edge
+
+# Why `suggested_stake` is not simply "what Kelly asked for" (stored on the Opportunity row
+# so the UI can say so). See docs/notes_pricing.md.
+NOTE_EDGE_CAPPED = "capped at the depth that still clears the minimum edge"
+NOTE_NO_EDGE_DEPTH = "less than $1 of depth clears the minimum edge"
+NOTE_MIN_ORDER = "{shares:.2f} shares is below the {min_size:g}-share minimum order"
 
 
 # ----------------------------------------------------------------------------- fees
@@ -80,7 +89,7 @@ def stake_for(
     kelly: float,
     kelly_fraction: float,
     max_stake_pct: float,
-    min_stake: float = 1.0,
+    min_stake: float = MIN_STAKE,
 ) -> float:
     """USD to stake: bankroll * kelly * kelly_fraction, capped at max_stake_pct% of bankroll.
 
@@ -145,6 +154,99 @@ def walk_asks(asks: Sequence[BookLevel], usd: float, fee_rate: float) -> tuple[f
     return avg_price, shares, fully_filled
 
 
+def edge_clearing_depth(
+    asks: Sequence[BookLevel], fair: float, min_edge: float, fee_rate: float
+) -> tuple[float, float, bool]:
+    """How far up the ladder the edge survives.
+
+    Returns (usd, shares, exhausted): the fee-inclusive dollars and shares available on the
+    levels whose *own* effective price still satisfies ``fair - cost >= min_edge``, and
+    whether the walk ran out of ladder (``True``) rather than out of edge (``False``).
+
+    ``walk_asks`` prices a given spend; this says how much may be spent at all. The
+    distinction matters: a thin ladder whose every level is cheap is a *liquidity* limit
+    (buy what is there), while a ladder whose next level is dearer than fair is an *edge*
+    limit (buying it is negative EV, so the stake must be cut). Contract note: this is a
+    separate step, so ``walk_asks``' hand-checked vectors are untouched.
+    """
+    usd = 0.0
+    shares = 0.0
+    for level in sorted(asks, key=lambda lvl: lvl.price):
+        if level.size <= 0.0:
+            continue
+        cost = effective_price(level.price, fee_rate)
+        if cost <= 0.0:
+            continue  # a free share is a data error, not depth
+        if fair - cost < min_edge - EDGE_EPS:
+            return usd, shares, False
+        usd += level.size * cost
+        shares += level.size
+    return usd, shares, True
+
+
+@dataclass(frozen=True)
+class StakePlan:
+    """What to suggest staking, how it would fill, and why it is not more."""
+
+    stake: float
+    fill_price: float | None
+    fill_complete: bool
+    fill_usd: float | None
+    note: str | None
+
+
+def plan_stake(
+    asks: Sequence[BookLevel],
+    fair: float,
+    kelly: float,
+    fee_rate: float,
+    prefs: PrefsLike,
+    min_order_size: float | None = None,
+) -> StakePlan:
+    """Size the bet: fractional Kelly, capped by the bankroll rules, by the depth that still
+    clears ``prefs.min_edge``, and by the market's minimum order size.
+
+    Sizing at the best ask alone is how a recommendation turns negative: the money above the
+    first level buys shares that are dearer than fair. So the Kelly stake is truncated to
+    ``edge_clearing_depth`` whenever the ladder runs out of *edge*, and the truncation is
+    reported as a partial fill (``fill_complete`` False, ``fill_usd`` = the edge-clearing
+    dollars) so the caller prefills the fillable amount instead of the Kelly amount. When the
+    ladder merely runs out of *shares* the stake stands and ``walk_asks`` reports the partial
+    fill, exactly as before.
+
+    A stake that would buy fewer shares than ``min_order_size`` cannot be placed at all, so it
+    is reported as 0 with a note rather than as an order the exchange would reject.
+    """
+    wanted = stake_for(prefs.bankroll, kelly, prefs.kelly_fraction, prefs.max_stake_pct)
+    if wanted <= 0.0:
+        return StakePlan(0.0, None, True, None, None)
+
+    clearing_usd, _clearing_shares, exhausted = edge_clearing_depth(
+        asks, fair, prefs.min_edge, fee_rate
+    )
+    stake, capped = wanted, False
+    if not exhausted and wanted > clearing_usd:
+        # Floor to the cent: rounding up would buy a share the edge does not cover.
+        stake = math.floor(clearing_usd * 10**STAKE_DECIMALS) / 10**STAKE_DECIMALS
+        capped = True
+        if stake < MIN_STAKE:
+            return StakePlan(0.0, None, True, None, NOTE_NO_EDGE_DEPTH)
+
+    fill_price, shares, complete = walk_asks(asks, stake, fee_rate)
+    if min_order_size is not None and min_order_size > 0.0 and shares < min_order_size:
+        return StakePlan(
+            0.0,
+            None,
+            True,
+            None,
+            NOTE_MIN_ORDER.format(shares=shares, min_size=min_order_size),
+        )
+    if capped:
+        return StakePlan(stake, fill_price, False, round(stake, STAKE_DECIMALS), NOTE_EDGE_CAPPED)
+    fill_usd = None if complete else round(fill_price * shares, STAKE_DECIMALS)
+    return StakePlan(stake, fill_price, complete, fill_usd, None)
+
+
 def limit_price_for_edge(fair: float, min_edge: float, tick: float = DEFAULT_TICK) -> float | None:
     """Highest maker price (fee 0) that still clears `min_edge`.
 
@@ -158,6 +260,24 @@ def limit_price_for_edge(fair: float, min_edge: float, tick: float = DEFAULT_TIC
     ticks = math.floor((fair - min_edge) / tick + 1e-9)
     price = round(ticks * tick, 10)  # strip float dust such as 0.5300000000000001
     return price if price > 0.0 else None
+
+
+def resting_limit_price(
+    fair: float, min_edge: float, best_ask: float | None, tick: float = DEFAULT_TICK
+) -> float | None:
+    """`limit_price_for_edge` capped one tick below the best ask so the order can rest.
+
+    A bid at or above the best ask crosses the book and fills as a taker (with the taker
+    fee), so a "maker" price there is fictitious. Returns None when no resting price
+    clears `min_edge`.
+    """
+    price = limit_price_for_edge(fair, min_edge, tick)
+    if price is None or best_ask is None:
+        return price
+    ceiling = round(best_ask - tick, 10)
+    if ceiling <= 0.0:
+        return None
+    return min(price, ceiling)
 
 
 # ----------------------------------------------------------------------------- assembly
@@ -177,9 +297,26 @@ def build_opportunity(
     None when there is no usable ask, when `fair - effective_price < prefs.min_edge`, or
     when the market reports liquidity below `prefs.min_liquidity_usd` (unknown liquidity
     passes). The fee is the market's own `taker_fee_rate` when present, else the prefs'.
+
+    Also None when the market is not tradable as a pre-game full-game market: closed,
+    not accepting orders, or already started (`game_start <= now`). A started game's
+    Polymarket price reflects the live score while the book snapshot is pre-game, so the
+    difference is not an edge. The scan service skips those markets before pricing; this
+    is defence in depth.
+
+    When the ask ladder cannot absorb the suggested stake, `fill_complete` is False and
+    `fill_usd` carries the fee-inclusive dollars the ladder can take at `fill_price`. The
+    stake itself is capped at the depth that still clears `prefs.min_edge` (see
+    `plan_stake`), so the suggestion is never sized on the best ask alone, and a stake that
+    would buy fewer shares than the market's minimum order size is reported as 0.
+    `stake_note` re-derives why for the caller that stores the row.
     """
     if outcome_index not in (0, 1):
         raise ValueError(f"outcome_index must be 0 or 1, got {outcome_index}")
+    if market.closed or not market.accepting_orders:
+        return None
+    if market.game_start is not None and _as_utc(market.game_start) <= _as_utc(now):
+        return None
     if book is None or not book.asks:
         return None
     ask = book.best_ask
@@ -195,11 +332,7 @@ def build_opportunity(
         return None
 
     kelly = kelly_fraction(fair.value, cost)
-    suggested_stake = stake_for(prefs.bankroll, kelly, prefs.kelly_fraction, prefs.max_stake_pct)
-    if suggested_stake > 0.0:
-        fill_price, _shares, fill_complete = walk_asks(book.asks, suggested_stake, fee_rate)
-    else:
-        fill_price, fill_complete = None, True
+    plan = plan_stake(book.asks, fair.value, kelly, fee_rate, prefs, market.min_order_size)
 
     tick = market.tick_size or DEFAULT_TICK
     return Opportunity(
@@ -211,24 +344,55 @@ def build_opportunity(
         edge=edge_value,
         ev_per_dollar=ev_per_dollar(fair.value, cost),
         kelly=kelly,
-        suggested_stake=suggested_stake,
-        fill_price=fill_price,
-        fill_complete=fill_complete,
-        limit_price=limit_price_for_edge(fair.value, prefs.min_edge, tick),
+        suggested_stake=plan.stake,
+        fill_price=plan.fill_price,
+        fill_complete=plan.fill_complete,
+        limit_price=resting_limit_price(fair.value, prefs.min_edge, ask, tick),
         book_game=book_game,
         computed_at=now,
+        fill_usd=plan.fill_usd,
     )
+
+
+def stake_note(opportunity: Opportunity, book: OrderBook | None, prefs: PrefsLike) -> str | None:
+    """Why `opportunity.suggested_stake` is what it is, or None when there is nothing to say.
+
+    A pure re-derivation from the same inputs `build_opportunity` used (the `Opportunity`
+    dataclass is the module contract and has no note field), so the scan service can persist
+    the reason on the row without the pricing logic living in two places.
+    """
+    if book is None:
+        return None
+    market = opportunity.market
+    fee_rate = market.taker_fee_rate if market.taker_fee_rate is not None else prefs.taker_fee_rate
+    plan = plan_stake(
+        book.asks, opportunity.fair.value, opportunity.kelly, fee_rate, prefs, market.min_order_size
+    )
+    return plan.note
+
+
+def _as_utc(value: datetime) -> datetime:
+    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
 
 
 __all__ = [
     "DEFAULT_TICK",
+    "MIN_STAKE",
+    "NOTE_EDGE_CAPPED",
+    "NOTE_MIN_ORDER",
+    "NOTE_NO_EDGE_DEPTH",
+    "StakePlan",
     "build_opportunity",
     "edge",
+    "edge_clearing_depth",
     "effective_price",
     "ev_per_dollar",
     "kelly_fraction",
     "limit_price_for_edge",
+    "plan_stake",
+    "resting_limit_price",
     "stake_for",
+    "stake_note",
     "taker_fee_per_share",
     "walk_asks",
 ]

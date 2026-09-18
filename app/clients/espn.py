@@ -6,8 +6,16 @@ Contract: docs/ARCHITECTURE.md; wire format: docs/RESEARCH.md.
 
 Reads ``events[].competitions[0]``: ``competitors[] {homeAway, team{displayName,
 abbreviation, shortDisplayName}, score}``, ``status.type.completed`` and, when present,
-``odds[0] {provider{name}, details ("KC -3.5"), overUnder, homeTeamOdds{moneyLine},
-awayTeamOdds{moneyLine}}``. Odds vanish for finished games.
+``odds[0] {provider{name}, details ("KC -3.5"), overUnder, homeTeamOdds{moneyLine,
+spreadOdds}, awayTeamOdds{moneyLine, spreadOdds}, overOdds, underOdds}``. Odds vanish for
+finished games.
+
+ESPN is a single low-weight book, but it is the ONLY book when there is no Odds API key,
+and then its prices set the fair probability outright. So it contributes a spread or total
+only when the payload carries a real price for each side (``spreadOdds`` per team,
+``overOdds``/``underOdds``): assuming -110/-110 would de-vig to exactly 0.5 whatever the
+real price is, and turn every side asking below ~0.475 into a fabricated opportunity.
+Moneylines always carry both prices, so h2h is unaffected.
 
 UNVERIFIED against the live API from the build environment (see docs/RESEARCH.md); the
 parser is defensive and skips events it cannot read, logging why. A non-browser
@@ -19,6 +27,7 @@ from __future__ import annotations
 import logging
 import re
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
@@ -34,16 +43,25 @@ ESPN_PATHS: dict[str, str] = {"nfl": "football/nfl", "nba": "basketball/nba", "m
 ESPN_BOOKMAKER = "espn"
 ESPN_DEFAULT_TITLE = "ESPN BET"
 
-# ESPN's scoreboard gives a spread line and a total but no per-side prices we can trust
-# (RESEARCH.md lists spreadOdds as unverified). We assume the standard -110 on each side
-# for spreads and totals, which de-vigs to 0.5/0.5 at the quoted line. ESPN is weighted low
-# in the consensus (book_weights["espn"] = 0.5 by default) precisely because of this.
-ESPN_SIDE_PRICE = -110
-
 # "KC -3.5", "NE +7", "GS -6.5". Pick'ems ("EVEN", "PK") yield no spreads market.
 _DETAILS_RE = re.compile(
     r"^\s*(?P<team>[A-Za-z][A-Za-z0-9.&' -]*?)\s+(?P<line>[+-]?\d+(?:\.\d+)?)\s*$"
 )
+
+
+@dataclass(frozen=True)
+class EspnOddsGame(EspnGame):
+    """`EspnGame` plus the per-side prices ESPN's odds block carries.
+
+    Additive: `EspnGame` is the contract type in `app/core/types.py` and stays as it is.
+    `to_book_games` accepts either, and a plain `EspnGame` (no per-side prices) contributes
+    only its moneylines.
+    """
+
+    home_spread_odds: int | None = None
+    away_spread_odds: int | None = None
+    over_odds: int | None = None
+    under_odds: int | None = None
 
 
 def _default_team_resolver(name: str, league: League) -> str | None:
@@ -101,6 +119,8 @@ class EspnClient:
         self.transport = transport
         self.base = base.rstrip("/")
         self._team_resolver: TeamResolver = team_resolver or _default_team_resolver
+        # Raw team labels the resolver could not name (see OddsApiClient.unresolved_teams).
+        self.unresolved_teams: list[dict[str, str]] = []
 
     # -- public --------------------------------------------------------------
 
@@ -132,7 +152,8 @@ class EspnClient:
     def to_book_games(games: Sequence[EspnGame]) -> list[BookGame]:
         """Treat ESPN's single odds block as bookmaker ``espn``. Games without odds are
         skipped. h2h needs both moneylines; spreads need parseable ``details`` naming one of
-        the two teams; totals need ``overUnder``."""
+        the two teams *and* a ``spreadOdds`` for each side; totals need ``overUnder`` *and*
+        both ``overOdds`` and ``underOdds``. Prices are never invented."""
         out: list[BookGame] = []
         for game in games:
             markets = _espn_markets(game)
@@ -207,6 +228,10 @@ class EspnClient:
         over_under: float | None = None
         home_ml: int | None = None
         away_ml: int | None = None
+        home_spread_odds: int | None = None
+        away_spread_odds: int | None = None
+        over_odds: int | None = None
+        under_odds: int | None = None
         odds = _first_dict(competition.get("odds"))
         if odds is not None:
             provider_obj = odds.get("provider")
@@ -223,10 +248,14 @@ class EspnClient:
             away_odds = odds.get("awayTeamOdds")
             if isinstance(home_odds, dict):
                 home_ml = to_american(home_odds.get("moneyLine"))
+                home_spread_odds = to_american(home_odds.get("spreadOdds"))
             if isinstance(away_odds, dict):
                 away_ml = to_american(away_odds.get("moneyLine"))
+                away_spread_odds = to_american(away_odds.get("spreadOdds"))
+            over_odds = to_american(odds.get("overOdds"))
+            under_odds = to_american(odds.get("underOdds"))
 
-        return EspnGame(
+        return EspnOddsGame(
             espn_id=espn_id,
             league=league,
             start_time=start,
@@ -242,6 +271,10 @@ class EspnClient:
             away_moneyline=away_ml,
             spread_details=details,
             over_under=over_under,
+            home_spread_odds=home_spread_odds,
+            away_spread_odds=away_spread_odds,
+            over_odds=over_odds,
+            under_odds=under_odds,
         )
 
     def _competitor(self, raw: dict, league: League) -> tuple[str, str, int | None]:
@@ -259,7 +292,10 @@ class EspnClient:
             or ""
         )
         if not key:
-            log.debug("ESPN %s: unresolved team %r (%s)", league, name, abbreviation)
+            entry = {"league": str(league), "name": name or abbreviation, "source": "espn"}
+            if entry not in self.unresolved_teams:
+                log.warning("ESPN %s: unresolved team %r (%s)", league, name, abbreviation)
+                self.unresolved_teams.append(entry)
         return name, key, _to_score(raw.get("score"))
 
 
@@ -282,6 +318,15 @@ def _side_for_token(game: EspnGame, token: str) -> str | None:
     return None
 
 
+def _side_prices(game: EspnGame, home: str, away: str) -> tuple[int, int] | None:
+    """The two per-side American prices when the payload carried both, else None."""
+    home_price = getattr(game, home, None)
+    away_price = getattr(game, away, None)
+    if isinstance(home_price, int) and isinstance(away_price, int):
+        return home_price, away_price
+    return None
+
+
 def _espn_markets(game: EspnGame) -> list[BookMarket]:
     home_key = game.home_team_key or None
     away_key = game.away_team_key or None
@@ -300,7 +345,14 @@ def _espn_markets(game: EspnGame) -> list[BookMarket]:
         )
 
     parsed = parse_spread_details(game.spread_details)
-    if parsed is not None:
+    spread_prices = _side_prices(game, "home_spread_odds", "away_spread_odds")
+    if parsed is not None and spread_prices is None:
+        log.debug(
+            "ESPN %s: spread %r has no per-side spreadOdds; contributing no spreads market",
+            game.league,
+            game.spread_details,
+        )
+    elif parsed is not None and spread_prices is not None:
         token, line = parsed
         side = _side_for_token(game, token)
         if side is None:
@@ -312,26 +364,35 @@ def _espn_markets(game: EspnGame) -> list[BookMarket]:
                 game.home_team_key,
             )
         else:
+            home_price, away_price = spread_prices
             other = 0.0 if line == 0 else -line
             home_point, away_point = (line, other) if side == "home" else (other, line)
             markets.append(
                 BookMarket(
                     key="spreads",
                     outcomes=(
-                        BookOutcome(game.home_name, home_key, ESPN_SIDE_PRICE, home_point),
-                        BookOutcome(game.away_name, away_key, ESPN_SIDE_PRICE, away_point),
+                        BookOutcome(game.home_name, home_key, home_price, home_point),
+                        BookOutcome(game.away_name, away_key, away_price, away_point),
                     ),
                     last_update=None,
                 )
             )
 
-    if game.over_under is not None:
+    total_prices = _side_prices(game, "over_odds", "under_odds")
+    if game.over_under is not None and total_prices is None:
+        log.debug(
+            "ESPN %s: total %s has no overOdds/underOdds; contributing no totals market",
+            game.league,
+            game.over_under,
+        )
+    elif game.over_under is not None and total_prices is not None:
+        over_price, under_price = total_prices
         markets.append(
             BookMarket(
                 key="totals",
                 outcomes=(
-                    BookOutcome("Over", None, ESPN_SIDE_PRICE, game.over_under),
-                    BookOutcome("Under", None, ESPN_SIDE_PRICE, game.over_under),
+                    BookOutcome("Over", None, over_price, game.over_under),
+                    BookOutcome("Under", None, under_price, game.over_under),
                 ),
                 last_update=None,
             )
@@ -344,7 +405,7 @@ __all__ = [
     "ESPN_BOOKMAKER",
     "ESPN_DEFAULT_TITLE",
     "ESPN_PATHS",
-    "ESPN_SIDE_PRICE",
     "EspnClient",
+    "EspnOddsGame",
     "parse_spread_details",
 ]

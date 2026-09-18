@@ -8,19 +8,26 @@ unless stated, as the contract says.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from app.core.edge import (
     DEFAULT_TICK,
+    NOTE_EDGE_CAPPED,
+    NOTE_MIN_ORDER,
+    NOTE_NO_EDGE_DEPTH,
     build_opportunity,
     edge,
+    edge_clearing_depth,
     effective_price,
     ev_per_dollar,
     kelly_fraction,
     limit_price_for_edge,
+    plan_stake,
+    resting_limit_price,
     stake_for,
+    stake_note,
     taker_fee_per_share,
     walk_asks,
 )
@@ -404,7 +411,10 @@ class TestBuildOpportunity:
         # $19.23 sits entirely on the 100-share best level at 0.5125 effective.
         assert opp.fill_price == pytest.approx(0.5125, abs=TOL)
         assert opp.fill_complete is True
-        assert opp.limit_price == pytest.approx(0.53, abs=TOL)
+        assert opp.fill_usd is None
+        # limit_price_for_edge(0.55, 0.02) = 0.53 would cross the 0.50 ask and fill as a
+        # taker; the resting maker price is one tick below the best ask.
+        assert opp.limit_price == pytest.approx(0.49, abs=TOL)
 
     def test_book_none_returns_none(self) -> None:
         assert build_opportunity(make_market(), 0, None, make_fair(), Prefs(), None, NOW) is None
@@ -517,15 +527,18 @@ class TestBuildOpportunity:
             make_market(tick_size=0.001), 0, make_book(LADDER), fair, Prefs(), None, NOW
         )
         assert coarse is not None and fine is not None
-        assert coarse.limit_price == pytest.approx(0.53, abs=1e-12)
-        assert fine.limit_price == pytest.approx(0.535, abs=1e-12)
+        # fair - min_edge = 0.5355 clears the 0.50 best ask, so the resting price is one
+        # market tick below the ask: 0.49 on a 1c tick, 0.499 on a 0.1c tick.
+        assert coarse.limit_price == pytest.approx(0.49, abs=1e-12)
+        assert fine.limit_price == pytest.approx(0.499, abs=1e-12)
 
     def test_limit_price_falls_back_to_one_cent_tick(self) -> None:
         opp = build_opportunity(
             make_market(tick_size=None), 0, make_book(LADDER), make_fair(0.5555), Prefs(), None, NOW
         )
         assert opp is not None
-        assert opp.limit_price == pytest.approx(0.53, abs=1e-12)
+        # one default 1c tick below the 0.50 ask
+        assert opp.limit_price == pytest.approx(0.49, abs=1e-12)
 
     def test_limit_price_none_when_min_edge_swallows_fair(self) -> None:
         # Edge 0.024 clears min_edge, but fair - min_edge = 0.005 is under one tick.
@@ -563,3 +576,238 @@ class TestBuildOpportunity:
     def test_is_deterministic(self) -> None:
         args = (make_market(), 0, make_book(LADDER), make_fair(), Prefs(), make_book_game(), NOW)
         assert build_opportunity(*args) == build_opportunity(*args)
+
+
+# ----------------------------------------------------------------------------- review fixes
+
+
+class TestRestingLimitPrice:
+    def test_caps_one_tick_below_the_best_ask(self) -> None:
+        # limit_price_for_edge(0.55, 0.02) = 0.53 would cross a 0.50 ask: rest at 0.49 instead
+        assert resting_limit_price(0.55, 0.02, 0.50) == pytest.approx(0.49, abs=1e-12)
+        assert resting_limit_price(0.55, 0.02, 0.60) == pytest.approx(0.53, abs=1e-12)  # rests
+        assert resting_limit_price(0.55, 0.02, 0.54) == pytest.approx(0.53, abs=1e-12)  # one under
+        assert resting_limit_price(0.55, 0.02, None) == pytest.approx(0.53, abs=1e-12)
+        assert resting_limit_price(0.5555, 0.02, 0.50, tick=0.001) == pytest.approx(
+            0.499, abs=1e-12
+        )
+
+    def test_none_when_nothing_can_rest(self) -> None:
+        assert resting_limit_price(0.55, 0.02, 0.01) is None  # ceiling would be 0
+        assert resting_limit_price(0.02, 0.02, 0.50) is None
+        with pytest.raises(ValueError):
+            resting_limit_price(0.55, 0.02, 0.50, tick=0.0)
+
+
+class TestBuildOpportunityTradability:
+    def test_closed_or_paused_markets_are_never_opportunities(self) -> None:
+        book, fair = make_book(LADDER), make_fair()
+        assert (
+            build_opportunity(make_market(closed=True), 0, book, fair, Prefs(), None, NOW) is None
+        )
+        paused = make_market(accepting_orders=False)
+        assert build_opportunity(paused, 0, book, fair, Prefs(), None, NOW) is None
+        assert build_opportunity(make_market(), 0, book, fair, Prefs(), None, NOW) is not None
+
+    def test_started_games_are_never_opportunities(self) -> None:
+        book, fair = make_book(LADDER), make_fair()
+        start = datetime(2026, 9, 20, 20, 25, tzinfo=UTC)
+        assert build_opportunity(make_market(), 0, book, fair, Prefs(), None, start) is None
+        after = start + timedelta(hours=1)
+        assert build_opportunity(make_market(), 0, book, fair, Prefs(), None, after) is None
+        before = start - timedelta(seconds=1)
+        assert build_opportunity(make_market(), 0, book, fair, Prefs(), None, before) is not None
+        # an unknown start is left to the scan service (which reads the book's commence time)
+        unknown = make_market(game_start=None)
+        assert build_opportunity(unknown, 0, book, fair, Prefs(), None, after) is not None
+
+    def test_thin_ladder_reports_the_fillable_dollars(self) -> None:
+        book = make_book(_levels((0.64, 5.0)))
+        opp = build_opportunity(make_market(), 0, book, make_fair(0.688564), Prefs(), None, NOW)
+        assert opp is not None
+        assert opp.suggested_stake == pytest.approx(20.00, abs=TOL)  # 2% cap, Kelly says more
+        assert opp.fill_complete is False
+        assert opp.fill_price == pytest.approx(effective_price(0.64, 0.05), abs=TOL)
+        assert opp.fill_usd == pytest.approx(round(5 * effective_price(0.64, 0.05), 2), abs=1e-9)
+        assert opp.fill_usd == pytest.approx(3.26, abs=1e-9)
+        deep = build_opportunity(
+            make_market(),
+            0,
+            make_book(_levels((0.64, 500.0))),
+            make_fair(0.688564),
+            Prefs(),
+            None,
+            NOW,
+        )
+        assert deep is not None and deep.fill_complete is True and deep.fill_usd is None
+
+
+# ------------------------------------------------------- review round 2: stake vs the ladder
+
+# The Celtics ladder from the finding: ten cheap shares, then a wall well above fair.
+THIN_THEN_DEAR = _levels((0.64, 10.0), (0.75, 5000.0))
+CELTICS_FAIR = 0.688564
+
+
+class TestEdgeClearingDepth:
+    def test_stops_at_the_first_level_that_does_not_clear_min_edge(self) -> None:
+        usd, shares, exhausted = edge_clearing_depth(THIN_THEN_DEAR, CELTICS_FAIR, 0.02, 0.05)
+        assert shares == 10.0
+        assert usd == pytest.approx(10 * effective_price(0.64, 0.05), abs=1e-9)
+        assert exhausted is False  # ran out of edge, not out of ladder
+
+    def test_exhausting_the_ladder_is_reported_separately(self) -> None:
+        ladder = _levels((0.64, 10.0))
+        usd, shares, exhausted = edge_clearing_depth(ladder, CELTICS_FAIR, 0.02, 0.05)
+        assert exhausted is True and shares == 10.0
+        assert usd == pytest.approx(10 * effective_price(0.64, 0.05), abs=1e-9)
+
+    def test_walks_several_clearing_levels_cheapest_first(self) -> None:
+        # LADDER against fair 0.55: 0.50 and 0.51 clear min_edge 0.02, 0.55 does not.
+        usd, shares, exhausted = edge_clearing_depth(LADDER, 0.55, 0.02, 0.05)
+        assert shares == 300.0 and exhausted is False
+        expected = 100 * effective_price(0.50, 0.05) + 200 * effective_price(0.51, 0.05)
+        assert usd == pytest.approx(expected, abs=1e-9)
+
+    def test_nothing_clears(self) -> None:
+        assert edge_clearing_depth(_levels((0.75, 100)), CELTICS_FAIR, 0.02, 0.05) == (
+            0.0,
+            0.0,
+            False,
+        )
+
+    def test_empty_ladder_and_zero_size_levels(self) -> None:
+        assert edge_clearing_depth((), 0.55, 0.02, 0.05) == (0.0, 0.0, True)
+        usd, shares, exhausted = edge_clearing_depth(
+            _levels((0.50, 0.0), (0.51, 100.0)), 0.55, 0.02, 0.05
+        )
+        assert shares == 100.0 and exhausted is True
+        assert usd == pytest.approx(100 * effective_price(0.51, 0.05), abs=1e-9)
+
+
+class TestStakeIsCappedByTheEdgeItCanActuallyBuy:
+    """The finding: the stake was sized at the best ask and never re-checked against the
+    ladder it walks, so the recommendation filled above fair and still claimed a full fill."""
+
+    def test_stake_is_cut_to_the_edge_clearing_depth(self) -> None:
+        opp = build_opportunity(
+            make_market(), 0, make_book(THIN_THEN_DEAR), make_fair(CELTICS_FAIR), Prefs(), None, NOW
+        )
+        assert opp is not None
+        # what the old sizing did: $20 of Kelly money filled at 0.72052, above fair 0.6886
+        old_fill, _, old_complete = walk_asks(THIN_THEN_DEAR, 20.0, 0.05)
+        assert old_complete is True and old_fill > CELTICS_FAIR
+        assert old_fill == pytest.approx(0.72052, abs=1e-4)
+
+        clearing = 10 * effective_price(0.64, 0.05)  # $6.5152
+        assert opp.suggested_stake == pytest.approx(6.51, abs=1e-9)  # floored to the cent
+        assert opp.suggested_stake <= clearing
+        assert opp.fill_price == pytest.approx(effective_price(0.64, 0.05), abs=TOL)
+        assert opp.fill_price < CELTICS_FAIR  # the suggestion is +EV at the price it fills
+        assert opp.fill_complete is False  # so the partial-fill UI / prefill takes over
+        assert opp.fill_usd == pytest.approx(6.51, abs=1e-9)
+
+    def test_a_deep_ladder_at_one_price_is_not_capped(self) -> None:
+        opp = build_opportunity(
+            make_market(),
+            0,
+            make_book(_levels((0.64, 5000.0))),
+            make_fair(CELTICS_FAIR),
+            Prefs(),
+            None,
+            NOW,
+        )
+        assert opp is not None
+        assert opp.suggested_stake == pytest.approx(20.00, abs=TOL)  # the 2% cap, as before
+        assert opp.fill_complete is True and opp.fill_usd is None
+
+    def test_a_thin_ladder_whose_levels_all_clear_still_reports_the_fillable_dollars(self) -> None:
+        """The contract vector: running out of shares is a liquidity limit, not an edge
+        limit, so the Kelly stake stands and walk_asks reports the partial fill."""
+        opp = build_opportunity(
+            make_market(),
+            0,
+            make_book(_levels((0.64, 5.0))),
+            make_fair(CELTICS_FAIR),
+            Prefs(),
+            None,
+            NOW,
+        )
+        assert opp is not None
+        assert opp.suggested_stake == pytest.approx(20.00, abs=TOL)
+        assert opp.fill_complete is False
+        assert opp.fill_price == pytest.approx(0.65152, abs=TOL)
+        assert opp.fill_usd == pytest.approx(3.26, abs=1e-9)
+
+    def test_note_explains_the_cap(self) -> None:
+        book = make_book(THIN_THEN_DEAR)
+        opp = build_opportunity(make_market(), 0, book, make_fair(CELTICS_FAIR), Prefs(), None, NOW)
+        assert opp is not None
+        assert stake_note(opp, book, Prefs()) == NOTE_EDGE_CAPPED
+        assert stake_note(opp, None, Prefs()) is None
+
+    def test_a_cap_under_a_dollar_suggests_nothing(self) -> None:
+        # one share of depth at the good price: $0.65 of edge is not a bet
+        book = make_book(_levels((0.64, 1.0), (0.75, 5000.0)))
+        prefs = Prefs(min_liquidity_usd=0.0)
+        opp = build_opportunity(make_market(), 0, book, make_fair(CELTICS_FAIR), prefs, None, NOW)
+        assert opp is not None
+        assert opp.suggested_stake == 0.0
+        assert opp.fill_price is None and opp.fill_complete is True and opp.fill_usd is None
+        assert stake_note(opp, book, prefs) == NOTE_NO_EDGE_DEPTH
+
+    def test_plan_stake_is_the_one_implementation(self) -> None:
+        prefs = Prefs()
+        kelly = kelly_fraction(CELTICS_FAIR, effective_price(0.64, 0.05))
+        plan = plan_stake(THIN_THEN_DEAR, CELTICS_FAIR, kelly, 0.05, prefs, 5.0)
+        assert (plan.stake, plan.fill_complete, plan.note) == (6.51, False, NOTE_EDGE_CAPPED)
+        assert plan.fill_usd == pytest.approx(6.51, abs=1e-9)
+
+
+class TestMinimumOrderSize:
+    """The finding: a $1.33 stake on a 5-share minimum is an order Polymarket would reject."""
+
+    def test_unplaceable_stake_is_reported_as_zero_with_a_reason(self) -> None:
+        prefs = Prefs(bankroll=100.0)
+        market = make_market(min_order_size=5.0)  # the fixtures' orderMinSize
+        book = make_book(_levels((0.55, 500.0)))
+        fair = make_fair(0.585612)  # Chiefs, from docs/FIXTURES.md
+        opp = build_opportunity(market, 0, book, fair, prefs, None, NOW)
+        assert opp is not None
+        assert opp.edge == pytest.approx(0.585612 - effective_price(0.55, 0.05), abs=1e-9)
+        # Kelly wanted $1.33, which buys 2.36 shares: under the 5-share minimum
+        wanted = stake_for(100.0, opp.kelly, 0.25, 2.0)
+        assert wanted == pytest.approx(1.33, abs=1e-9)
+        assert wanted / effective_price(0.55, 0.05) == pytest.approx(2.3649, abs=1e-4)
+        assert opp.suggested_stake == 0.0
+        assert opp.fill_price is None and opp.fill_complete is True and opp.fill_usd is None
+        note = stake_note(opp, book, prefs)
+        assert note == NOTE_MIN_ORDER.format(shares=2.3649, min_size=5.0)
+        assert note is not None and "minimum order" in note and len(note) <= 80
+
+    def test_a_bankroll_that_clears_the_minimum_is_suggested_as_before(self) -> None:
+        market = make_market(min_order_size=5.0)
+        book = make_book(_levels((0.55, 500.0)))
+        opp = build_opportunity(market, 0, book, make_fair(0.585612), Prefs(), None, NOW)
+        assert opp is not None
+        assert opp.suggested_stake == pytest.approx(13.28, abs=0.01)
+        assert opp.suggested_stake / opp.effective_price > 5.0
+        assert stake_note(opp, book, Prefs()) is None
+
+    def test_unknown_or_zero_minimum_never_blocks_a_stake(self) -> None:
+        prefs = Prefs(bankroll=100.0)
+        book = make_book(_levels((0.55, 500.0)))
+        for min_size in (None, 0.0):
+            opp = build_opportunity(
+                make_market(min_order_size=min_size), 0, book, make_fair(0.585612), prefs, None, NOW
+            )
+            assert opp is not None and opp.suggested_stake == pytest.approx(1.33, abs=1e-9)
+
+    def test_a_ladder_too_thin_for_the_minimum_order_suggests_nothing(self) -> None:
+        """Two shares on the book cannot fill a five-share minimum at any stake."""
+        market = make_market(min_order_size=5.0, liquidity=None)
+        book = make_book(_levels((0.64, 2.0)))
+        opp = build_opportunity(market, 0, book, make_fair(CELTICS_FAIR), Prefs(), None, NOW)
+        assert opp is not None
+        assert opp.suggested_stake == 0.0
+        assert stake_note(opp, book, Prefs()) is not None

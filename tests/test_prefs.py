@@ -61,6 +61,30 @@ def test_get_prefs_creates_singleton_with_defaults(db_session: Session) -> None:
         ({"match_window_hours": 0}, "match_window_hours"),
         ({"min_liquidity_usd": -1}, "min_liquidity_usd"),
         ({"not_a_pref": 1}, "unknown preference"),
+        # review round: branches the settings form can reach but nothing covered
+        ({"bankroll": "nan"}, "bankroll must be a finite number"),
+        ({"bankroll": "inf"}, "bankroll must be a finite number"),
+        ({"bankroll": float("inf")}, "bankroll must be a finite number"),
+        ({"min_edge": float("nan")}, "min_edge must be a finite number"),
+        ({"bankroll": None}, "bankroll must be a number, got NoneType"),
+        ({"bankroll": [1000]}, "bankroll must be a number, got list"),
+        ({"stale_book_minutes": "abc"}, "stale_book_minutes must be an integer, got 'abc'"),
+        ({"stale_book_minutes": "1.5"}, "stale_book_minutes must be an integer, got '1.5'"),
+        ({"stale_book_minutes": None}, "stale_book_minutes must be an integer, got NoneType"),
+        ({"bookmakers": 7}, "bookmakers must be a list of strings"),
+        ({"bookmakers": None}, "bookmakers must be a list of strings"),
+        ({"bookmakers": ""}, "bookmakers must contain at least one"),
+        ({"bookmakers": "   "}, "bookmakers must contain at least one"),
+        ({"book_weights": {"": 1.0}}, "book_weights keys must be bookmaker slugs"),
+        ({"book_weights": {"   ": 1.0}}, "book_weights keys must be bookmaker slugs"),
+        ({"book_weights": {3: 1.0}}, "book_weights keys must be bookmaker slugs"),
+        ({"book_weights": {"pinnacle": "nan"}}, "must be a finite number"),
+        ({"book_weights": {"pinnacle": None}}, "must be a number, got NoneType"),
+        ({"espn_fallback_enabled": 2}, "true or false"),
+        ({"espn_fallback_enabled": None}, "true or false"),
+        ({"leagues_enabled": 3}, "leagues_enabled must be a list of strings"),
+        ({"leagues_enabled": [7]}, "entries must be strings"),
+        ({"devig_method": None}, "devig_method must be a string"),
     ],
 )
 def test_update_prefs_rejects_bad_values(db_session: Session, data: dict, fragment: str) -> None:
@@ -124,3 +148,86 @@ def test_validate_prefs_is_pure() -> None:
         "espn_fallback_enabled": True,
         "leagues_enabled": ["nba"],
     }
+
+
+# --------------------------------------------------------------------------- review fixes
+
+
+@pytest.mark.parametrize(
+    ("data", "expected"),
+    [
+        ({"kelly_fraction": 1.0}, 1.0),  # (0, 1]
+        ({"kelly_fraction": "0.000001"}, 1e-6),
+        ({"max_stake_pct": 100}, 100.0),  # (0, 100]
+        ({"min_edge": 0}, 0.0),  # [0, 0.5)
+        ({"min_edge": 0.4999}, 0.4999),
+        ({"taker_fee_rate": 0}, 0.0),  # [0, 0.2)
+        ({"taker_fee_rate": 0.1999}, 0.1999),
+        ({"match_window_hours": 336}, 336.0),  # (0, 336]
+        ({"match_window_hours": 0.5}, 0.5),
+        ({"min_liquidity_usd": 0}, 0.0),  # [0, inf)
+        ({"stale_book_minutes": 0}, 0),  # [0, 43200]; 0 = never stale
+        ({"stale_book_minutes": 43200}, 43200),
+    ],
+)
+def test_validate_prefs_accepts_the_inclusive_boundaries(data: dict, expected) -> None:
+    (key,) = data
+    value = validate_prefs(data)[key]
+    assert value == expected and type(value) is type(expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"match_window_hours": 337},
+        {"match_window_hours": 336.001},
+        {"stale_book_minutes": 43201},
+        {"kelly_fraction": 1.0001},
+        {"max_stake_pct": 100.01},
+        {"bankroll": True},  # bools are not numbers
+        {"min_edge": False},
+        {"stale_book_minutes": True},
+    ],
+)
+def test_validate_prefs_rejects_just_past_the_boundary_and_bools(data: dict) -> None:
+    with pytest.raises(ValueError):
+        validate_prefs(data)
+
+
+@pytest.mark.parametrize(
+    ("data", "expected"),
+    [
+        ({"espn_fallback_enabled": 1}, True),  # numeric booleans (an HTML form posts "1")
+        ({"espn_fallback_enabled": 0}, False),
+        ({"espn_fallback_enabled": 1.0}, True),
+        ({"espn_fallback_enabled": 0.0}, False),
+        ({"espn_fallback_enabled": ""}, False),  # unchecked checkbox
+        ({"espn_fallback_enabled": "ON"}, True),
+        ({"stale_book_minutes": 30.0}, 30),  # a whole float is an integer
+    ],
+)
+def test_validate_prefs_accepts_form_shaped_values(data: dict, expected) -> None:
+    (key,) = data
+    value = validate_prefs(data)[key]
+    assert value == expected and type(value) is type(expected)
+
+
+def test_a_rejected_field_applies_nothing_at_all(db_session: Session) -> None:
+    """update_prefs validates everything before it writes anything."""
+    before = get_prefs(db_session)
+    bankroll, fee = before.bankroll, before.taker_fee_rate
+    with pytest.raises(ValueError, match="stale_book_minutes"):
+        update_prefs(db_session, {"bankroll": 5000, "stale_book_minutes": "abc"})
+    db_session.expire_all()
+    after = get_prefs(db_session)
+    assert (after.bankroll, after.taker_fee_rate) == (bankroll, fee)
+
+
+def test_leagues_enabled_must_keep_at_least_one_league(db_session: Session) -> None:
+    with pytest.raises(ValueError, match="at least one league"):
+        validate_prefs({"leagues_enabled": ""})
+    with pytest.raises(ValueError, match="at least one league"):
+        validate_prefs({"leagues_enabled": []})
+    with pytest.raises(ValueError, match="at least one league"):
+        update_prefs(db_session, {"leagues_enabled": []})
+    assert get_prefs(db_session).leagues_enabled == ["nfl", "nba", "mlb"]

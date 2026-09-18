@@ -310,3 +310,37 @@ def test_parse_json_list_returns_a_copy() -> None:
     original = ["a"]
     result = parse_json_list(original)
     assert result == original and result is not original
+
+
+# --------------------------------------------------------------------------- review fixes
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "NBA Finals: Thunder vs. Pacers",
+        "World Series: Yankees vs. Dodgers",
+        "Thunder vs. Pacers (Series)",
+        "Yankees vs. Dodgers - ALDS",
+        "NLCS: Dodgers vs. Braves",
+        "NL Wild Card: Padres vs. Braves",
+        "Eastern Conference Finals: Celtics vs. Knicks",
+        "Playoffs: Lakers vs. Nuggets",
+        "Best of 7: Celtics vs. Knicks",
+        "Western Conference Semifinals: Thunder vs. Nuggets",
+    ],
+)
+def test_series_titled_like_games_are_not_games_without_a_type(question: str) -> None:
+    """With no `sportsMarketType`, a series / round winner wearing a game title must not be
+    priced as a moneyline against game 1's book odds."""
+    assert parse_market_type("", question) is None
+    assert parse_market_type(None, question) is None
+    # an explicit game type from Gamma still wins over the wording
+    assert parse_market_type("moneyline", question) == "moneyline"
+
+
+def test_numbered_series_games_are_games() -> None:
+    assert parse_market_type(None, "World Series Game 3: Yankees vs. Dodgers") == "moneyline"
+    assert parse_market_type("", "NBA Finals Game 7: Thunder vs. Pacers") == "moneyline"
+    assert parse_market_type("", "NBA Finals Game 7: O/U 210.5") == "total"
+    assert parse_market_type("", "ALCS Game 2 Spread: Yankees (-1.5)") == "spread"
