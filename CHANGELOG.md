@@ -103,3 +103,8 @@
   own `.table-wrap`.
 - `docs/PHONE.md`: deploy-to-Fly and Add-to-Home-Screen guide, iOS PWA caveats, first-run
   demo seed and troubleshooting.
+- `docs/WINDOWS.md` and `scripts/run-windows.ps1`: self-host on an always-on Windows
+  desktop, reached from the phone over a Tailscale HTTPS address, started by Task
+  Scheduler. Covers the prod-on-your-own-machine settings (`APP_ENV=prod` for the Secure
+  cookie, `TRUSTED_PROXY_HEADER=x-forwarded-for` because Tailscale proxies from loopback)
+  and what the scheduler costs in Odds API credits once the host never sleeps.
