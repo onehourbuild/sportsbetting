@@ -2,7 +2,96 @@
 {% block title %}Diagnostics · {{ app_name }}{% endblock %}
 {% block content %}
 <h1 class="page-title">Diagnostics</h1>
+
 <section class="card">
-  <p class="muted">No scans recorded yet.</p>
+  <h2 class="sub">Environment</h2>
+  <div class="stat"><span class="stat-label">App</span><span class="stat-value">{{ app_name }} {{ app_version }} · {{ app_env }}</span></div>
+  <div class="stat"><span class="stat-label">DEMO_MODE</span><span class="stat-value">{{ 'on' if demo_mode else 'off' }}</span></div>
+  <div class="stat"><span class="stat-label">ODDS_API_KEY</span><span class="stat-value">{{ 'set' if has_odds_key else 'not set' }}</span></div>
+  <div class="stat"><span class="stat-label">Odds API credits</span><span class="stat-value">{% if quota.remaining is not none %}{{ quota.remaining }} left{% else %}—{% endif %}</span></div>
+  <div class="stat"><span class="stat-label">Scheduler</span><span class="stat-value">poly {{ scheduler_poly_minutes }}m · books {{ scheduler_books_hours }}h</span></div>
+  <div class="stat"><span class="stat-label">Rows</span><span class="stat-value">{{ counts.games }} games · {{ counts.markets }} markets · {{ counts.opportunities }} opps · {{ counts.bets }} bets</span></div>
+  <div class="stat"><span class="stat-label">Quotes</span><span class="stat-value">{{ counts.pm_quotes }} pm · {{ counts.book_quotes }} book</span></div>
+  <p class="small"><a href="/healthz">/healthz</a></p>
+</section>
+
+<section class="card">
+  <h2 class="sub">Last {{ scans|length }} scan{{ '' if scans|length == 1 else 's' }}</h2>
+  {% if scans %}
+  <div class="table-wrap">
+    <table class="scan-table">
+      <thead>
+        <tr><th>#</th><th>Kind</th><th>Started</th><th>OK</th><th class="num">Markets</th><th class="num">Matched</th><th class="num">Opps</th><th class="num">Credits</th></tr>
+      </thead>
+      <tbody>
+      {% for s in scans %}
+        <tr class="{{ 'ok' if s.ok else 'failed' }}">
+          <td class="mono">{{ s.id }}</td>
+          <td>{{ s.kind }}{% if s.leagues %} <span class="muted small">{{ s.leagues|join(',') }}</span>{% endif %}</td>
+          <td>{{ s.started_at|ago }}</td>
+          <td>{% if s.ok %}<span class="badge badge-good">ok</span>{% else %}<span class="badge badge-bad">failed</span>{% endif %}</td>
+          <td class="num">{{ s.n_markets }}</td>
+          <td class="num">{{ s.n_matched }}</td>
+          <td class="num">{{ s.n_opps }}</td>
+          <td class="num">{% if s.credits_used is not none or s.credits_remaining is not none %}{{ s.credits_used if s.credits_used is not none else '—' }} / {{ s.credits_remaining if s.credits_remaining is not none else '—' }}{% else %}—{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted">No scans recorded yet. Run a refresh from the Edges page.</p>
+  {% endif %}
+</section>
+
+{% if latest %}
+<section class="card">
+  <h2 class="sub">Latest scan #{{ latest.id }} <span class="muted">({{ latest.kind }}, {{ latest.started_at|ago }})</span></h2>
+
+  <h3 class="sub">Errors ({{ errors|length }})</h3>
+  {% if errors %}
+  <ul class="diag-list errors">{% for e in errors %}<li class="mono">{{ e }}</li>{% endfor %}</ul>
+  {% else %}<p class="muted small">None.</p>{% endif %}
+
+  <h3 class="sub">Unmatched markets ({{ unmatched|length }})</h3>
+  {% if unmatched %}
+  <ul class="diag-list">
+    {% for item in unmatched %}
+    <li>
+      {% if item.reason %}<span class="badge badge-warn">{{ item.reason }}</span>{% endif %}
+      {% for k, v in item.fields %}<span class="kv"><span class="muted">{{ k }}</span> <span class="mono">{{ v }}</span></span>{% endfor %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}<p class="muted small">None.</p>{% endif %}
+
+  <h3 class="sub">Unparseable markets ({{ unparseable|length }})</h3>
+  {% if unparseable %}
+  <ul class="diag-list">
+    {% for item in unparseable %}
+    <li>
+      {% if item.reason %}<span class="badge badge-bad">{{ item.reason }}</span>{% endif %}
+      {% for k, v in item.fields %}<span class="kv"><span class="muted">{{ k }}</span> <span class="mono">{{ v }}</span></span>{% endfor %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}<p class="muted small">None.</p>{% endif %}
+
+  {% if other_notes %}
+  <h3 class="sub">Other notes</h3>
+  <pre class="raw">{{ other_notes|tojson(indent=2) }}</pre>
+  {% endif %}
+</section>
+{% endif %}
+
+<section class="card">
+  <h2 class="sub">Raw samples</h2>
+  <p class="muted small">Latest stored row of each quote table, exactly as persisted.</p>
+  {% for name, obj, text in samples %}
+  <details class="raw-sample"{% if obj %} open{% endif %}>
+    <summary>{{ name }}{% if not obj %} <span class="muted">(none yet)</span>{% endif %}</summary>
+    <pre class="raw">{{ text }}</pre>
+  </details>
+  {% endfor %}
 </section>
 {% endblock %}

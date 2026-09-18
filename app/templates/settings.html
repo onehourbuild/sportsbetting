@@ -1,13 +1,73 @@
 {% extends "base.html" %}
+{% import "partials/macros.html" as m %}
 {% block title %}Settings · {{ app_name }}{% endblock %}
 {% block content %}
 <h1 class="page-title">Settings</h1>
+
+<section class="card status">
+  <h2 class="sub">Status</h2>
+  <div class="stat"><span class="stat-label">ODDS_API_KEY</span>
+    <span class="stat-value">{% if has_odds_key %}<span class="badge badge-good">set</span>{% else %}<span class="badge badge-warn">not set</span>{% endif %}</span></div>
+  <div class="stat"><span class="stat-label">Odds API credits</span>
+    <span class="stat-value">{% if quota.remaining is not none %}{{ quota.remaining }} left{% if quota.used is not none %} · {{ quota.used }} used{% endif %}{% else %}—{% endif %}</span></div>
+  {% if quota.as_of %}<div class="stat"><span class="stat-label">Quota as of</span><span class="stat-value">{{ quota.as_of|ago }}</span></div>{% endif %}
+  <div class="stat"><span class="stat-label">Books refresh cost</span>
+    <span class="stat-value">{% if books_cost is not none %}{{ books_cost }} credits{% else %}—{% endif %}</span></div>
+  <div class="stat"><span class="stat-label">DEMO_MODE</span>
+    <span class="stat-value">{% if demo_mode %}<span class="badge badge-info">on</span>{% else %}<span class="badge">off</span>{% endif %}</span></div>
+  {% if not has_odds_key %}<p class="muted small">Without an Odds API key, Books refreshes use the ESPN scoreboard as a single low-weight book. Add <code>ODDS_API_KEY</code> to <code>.env</code> and restart.</p>{% endif %}
+</section>
+
+{% if saved %}<p class="alert alert-ok" role="status">Saved.</p>{% endif %}
+{% if error %}<p class="alert alert-error" role="alert">{{ error }}</p>{% endif %}
+
+<form method="post" action="/settings" class="stack settings-form">
+  <section class="card">
+    <h2 class="sub">Sizing</h2>
+    <label class="field"><span>Bankroll (USD)</span>
+      <input name="bankroll" inputmode="decimal" value="{{ values.bankroll }}" required></label>
+    <label class="field"><span>Kelly fraction (0–1)</span>
+      <input name="kelly_fraction" inputmode="decimal" value="{{ values.kelly_fraction }}" required></label>
+    <label class="field"><span>Max stake (% of bankroll)</span>
+      <input name="max_stake_pct" inputmode="decimal" value="{{ values.max_stake_pct }}" required></label>
+    <label class="field"><span>Minimum edge (e.g. 0.02 = 2%)</span>
+      <input name="min_edge" inputmode="decimal" value="{{ values.min_edge }}" required></label>
+    <label class="field"><span>Taker fee rate (Polymarket sports: 0.05)</span>
+      <input name="taker_fee_rate" inputmode="decimal" value="{{ values.taker_fee_rate }}" required></label>
+    <label class="field"><span>Minimum market liquidity (USD)</span>
+      <input name="min_liquidity_usd" inputmode="decimal" value="{{ values.min_liquidity_usd }}" required></label>
+  </section>
+
+  <section class="card">
+    <h2 class="sub">Reference price</h2>
+    <label class="field"><span>De-vig method</span>
+      <select name="devig_method">
+        {% for method in devig_methods %}<option value="{{ method }}"{% if values.devig_method == method %} selected{% endif %}>{{ method }}</option>{% endfor %}
+      </select></label>
+    <label class="field"><span>Bookmakers (comma separated Odds API keys)</span>
+      <input name="bookmakers" value="{{ values.bookmakers }}" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+    <label class="field"><span>Book weights (one <code>bookmaker=weight</code> per line; 0 excludes)</span>
+      <textarea name="book_weights" rows="7" autocapitalize="off" autocorrect="off" spellcheck="false">{{ values.book_weights }}</textarea></label>
+    <label class="check"><input type="checkbox" name="espn_fallback_enabled"{% if values.espn_fallback_enabled %} checked{% endif %}> <span>ESPN scoreboard fallback when no Odds API key / credits</span></label>
+    <label class="field"><span>Match window (hours between Polymarket and book start times)</span>
+      <input name="match_window_hours" inputmode="decimal" value="{{ values.match_window_hours }}" required></label>
+    <label class="field"><span>Book snapshot considered stale after (minutes)</span>
+      <input name="stale_book_minutes" inputmode="numeric" value="{{ values.stale_book_minutes }}" required></label>
+  </section>
+
+  <section class="card">
+    <h2 class="sub">Leagues</h2>
+    <div class="check-row">
+      {% for league in leagues %}
+      <label class="check"><input type="checkbox" name="leagues_enabled" value="{{ league }}"{% if league in values.leagues_enabled %} checked{% endif %}> <span>{{ league|upper }}</span></label>
+      {% endfor %}
+    </div>
+  </section>
+
+  <button type="submit" class="btn btn-primary btn-block">Save settings</button>
+</form>
+
 <section class="card">
-  <div class="stat"><span class="stat-label">Bankroll</span><span class="stat-value">{{ prefs.bankroll|usd }}</span></div>
-  <div class="stat"><span class="stat-label">Kelly fraction</span><span class="stat-value">{{ prefs.kelly_fraction }}</span></div>
-  <div class="stat"><span class="stat-label">Min edge</span><span class="stat-value">{{ prefs.min_edge|pct }}</span></div>
-  <div class="stat"><span class="stat-label">Taker fee</span><span class="stat-value">{{ prefs.taker_fee_rate|pct }}</span></div>
-  <div class="stat"><span class="stat-label">De-vig</span><span class="stat-value">{{ prefs.devig_method }}</span></div>
-  <p class="muted">Settings form placeholder.</p>
+  <form method="post" action="/logout"><button type="submit" class="btn btn-block">Sign out</button></form>
 </section>
 {% endblock %}

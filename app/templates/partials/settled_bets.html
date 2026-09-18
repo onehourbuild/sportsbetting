@@ -1,0 +1,19 @@
+{% import "partials/macros.html" as m %}
+<section id="settled-bets" class="bets-section">
+  <h2 class="sub">Settled <span class="muted">({{ settled_bets|length }})</span></h2>
+  {% if not settled_bets %}
+  <div class="card empty"><p class="muted">Nothing settled yet. Bets settle automatically when Polymarket resolves the market, or manually from the open list.</p></div>
+  {% endif %}
+  {% for v in settled_bets %}
+  <article class="card bet settled {{ v.bet.status }}" data-bet-id="{{ v.bet.id }}">
+    {{ m.bet_head(v) }}
+    <dl class="metrics metrics-4">
+      <div><dt>Result</dt><dd><span class="badge {{ 'badge-good' if v.bet.status == 'won' else ('badge-bad' if v.bet.status == 'lost' else '') }}">{{ v.bet.status }}</span></dd></div>
+      <div><dt>P&amp;L</dt><dd class="{{ 'good' if (v.bet.pnl_usd or 0) > 0 else ('bad' if (v.bet.pnl_usd or 0) < 0 else '') }}">{{ v.bet.pnl_usd|usd }}</dd></div>
+      <div><dt>CLV</dt><dd class="{{ 'good' if (v.bet.clv or 0) > 0 else ('bad' if (v.bet.clv or 0) < 0 else '') }}">{{ v.bet.clv|signed_pct }}</dd></div>
+      <div><dt>Stake</dt><dd>{{ v.bet.stake_usd|usd }} @ {{ v.bet.price|cents }}</dd></div>
+    </dl>
+    <p class="muted small">placed {{ v.bet.placed_at|ago }}{% if v.bet.settled_at %} · settled {{ v.bet.settled_at|ago }}{% endif %}{% if v.bet.closing_pm_price is not none %} · close {{ v.bet.closing_pm_price|cents }}{% endif %}{% if v.bet.closing_fair is not none %} · closing fair {{ v.bet.closing_fair|pct }}{% endif %}{% if v.bet.notes %} · {{ v.bet.notes }}{% endif %}</p>
+  </article>
+  {% endfor %}
+</section>

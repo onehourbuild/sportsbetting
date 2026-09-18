@@ -1,0 +1,472 @@
+[
+  {
+    "id": "3b1b2787489fee84e0f7584e19eee9b9",
+    "sport_key": "baseball_mlb",
+    "sport_title": "MLB",
+    "commence_time": "2026-09-20T02:10:00Z",
+    "home_team": "Los Angeles Dodgers",
+    "away_team": "New York Yankees",
+    "bookmakers": [
+      {
+        "key": "pinnacle",
+        "title": "Pinnacle",
+        "last_update": "2026-09-19T14:55:00Z",
+        "markets": [
+          {
+            "key": "h2h",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Los Angeles Dodgers",
+                "price": -140
+              },
+              {
+                "name": "New York Yankees",
+                "price": 120
+              }
+            ]
+          },
+          {
+            "key": "spreads",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Los Angeles Dodgers",
+                "price": 120,
+                "point": -1.5
+              },
+              {
+                "name": "New York Yankees",
+                "price": -140,
+                "point": 1.5
+              }
+            ]
+          },
+          {
+            "key": "totals",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "price": -110,
+                "point": 8.5
+              },
+              {
+                "name": "Under",
+                "price": -110,
+                "point": 8.5
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "betonlineag",
+        "title": "BetOnline.ag",
+        "last_update": "2026-09-19T14:55:00Z",
+        "markets": [
+          {
+            "key": "h2h",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Los Angeles Dodgers",
+                "price": -140
+              },
+              {
+                "name": "New York Yankees",
+                "price": 118
+              }
+            ]
+          },
+          {
+            "key": "spreads",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Los Angeles Dodgers",
+                "price": 120,
+                "point": -1.5
+              },
+              {
+                "name": "New York Yankees",
+                "price": -142,
+                "point": 1.5
+              }
+            ]
+          },
+          {
+            "key": "totals",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "price": -112,
+                "point": 8.5
+              },
+              {
+                "name": "Under",
+                "price": -110,
+                "point": 8.5
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "lowvig",
+        "title": "LowVig.ag",
+        "last_update": "2026-09-19T14:55:00Z",
+        "markets": [
+          {
+            "key": "h2h",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Los Angeles Dodgers",
+                "price": -138
+              },
+              {
+                "name": "New York Yankees",
+                "price": 118
+              }
+            ]
+          },
+          {
+            "key": "spreads",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Los Angeles Dodgers",
+                "price": 122,
+                "point": -1.5
+              },
+              {
+                "name": "New York Yankees",
+                "price": -142,
+                "point": 1.5
+              }
+            ]
+          },
+          {
+            "key": "totals",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "price": -112,
+                "point": 8.5
+              },
+              {
+                "name": "Under",
+                "price": -108,
+                "point": 8.5
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "draftkings",
+        "title": "DraftKings",
+        "last_update": "2026-09-19T14:55:00Z",
+        "markets": [
+          {
+            "key": "h2h",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Los Angeles Dodgers",
+                "price": -141
+              },
+              {
+                "name": "New York Yankees",
+                "price": 115
+              }
+            ]
+          },
+          {
+            "key": "spreads",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Los Angeles Dodgers",
+                "price": 119,
+                "point": -1.5
+              },
+              {
+                "name": "New York Yankees",
+                "price": -145,
+                "point": 1.5
+              }
+            ]
+          },
+          {
+            "key": "totals",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "price": -115,
+                "point": 8.5
+              },
+              {
+                "name": "Under",
+                "price": -111,
+                "point": 8.5
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "fanduel",
+        "title": "FanDuel",
+        "last_update": "2026-09-19T14:55:00Z",
+        "markets": [
+          {
+            "key": "h2h",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Los Angeles Dodgers",
+                "price": -142
+              },
+              {
+                "name": "New York Yankees",
+                "price": 116
+              }
+            ]
+          },
+          {
+            "key": "spreads",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Los Angeles Dodgers",
+                "price": 118,
+                "point": -1.5
+              },
+              {
+                "name": "New York Yankees",
+                "price": -144,
+                "point": 1.5
+              }
+            ]
+          },
+          {
+            "key": "totals",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "price": -114,
+                "point": 8.5
+              },
+              {
+                "name": "Under",
+                "price": -112,
+                "point": 8.5
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "4e8197d71f70fd5bfdfa4eae07dc3513",
+    "sport_key": "baseball_mlb",
+    "sport_title": "MLB",
+    "commence_time": "2026-09-20T01:40:00Z",
+    "home_team": "Seattle Mariners",
+    "away_team": "Athletics",
+    "bookmakers": [
+      {
+        "key": "pinnacle",
+        "title": "Pinnacle",
+        "last_update": "2026-09-19T14:55:00Z",
+        "markets": [
+          {
+            "key": "h2h",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Seattle Mariners",
+                "price": -165
+              },
+              {
+                "name": "Athletics",
+                "price": 140
+              }
+            ]
+          },
+          {
+            "key": "totals",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "price": -110,
+                "point": 7.5
+              },
+              {
+                "name": "Under",
+                "price": -110,
+                "point": 7.5
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "betonlineag",
+        "title": "BetOnline.ag",
+        "last_update": "2026-09-19T14:55:00Z",
+        "markets": [
+          {
+            "key": "h2h",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Seattle Mariners",
+                "price": -167
+              },
+              {
+                "name": "Athletics",
+                "price": 140
+              }
+            ]
+          },
+          {
+            "key": "totals",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "price": -110,
+                "point": 7.5
+              },
+              {
+                "name": "Under",
+                "price": -112,
+                "point": 7.5
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "lowvig",
+        "title": "LowVig.ag",
+        "last_update": "2026-09-19T14:55:00Z",
+        "markets": [
+          {
+            "key": "h2h",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Seattle Mariners",
+                "price": -167
+              },
+              {
+                "name": "Athletics",
+                "price": 142
+              }
+            ]
+          },
+          {
+            "key": "totals",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "price": -108,
+                "point": 7.5
+              },
+              {
+                "name": "Under",
+                "price": -112,
+                "point": 7.5
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "draftkings",
+        "title": "DraftKings",
+        "last_update": "2026-09-19T14:55:00Z",
+        "markets": [
+          {
+            "key": "h2h",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Seattle Mariners",
+                "price": -170
+              },
+              {
+                "name": "Athletics",
+                "price": 139
+              }
+            ]
+          },
+          {
+            "key": "totals",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "price": -111,
+                "point": 7.5
+              },
+              {
+                "name": "Under",
+                "price": -115,
+                "point": 7.5
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "fanduel",
+        "title": "FanDuel",
+        "last_update": "2026-09-19T14:55:00Z",
+        "markets": [
+          {
+            "key": "h2h",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Seattle Mariners",
+                "price": -169
+              },
+              {
+                "name": "Athletics",
+                "price": 138
+              }
+            ]
+          },
+          {
+            "key": "totals",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "price": -112,
+                "point": 7.5
+              },
+              {
+                "name": "Under",
+                "price": -114,
+                "point": 7.5
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

@@ -1,0 +1,82 @@
+[
+  {
+    "id": 2001,
+    "name": "Los Angeles Lakers",
+    "league": "nba",
+    "record": "0-0",
+    "alias": "Lakers",
+    "abbreviation": "LAL",
+    "createdAt": "2025-01-10T00:00:00Z",
+    "updatedAt": "2026-09-18T00:00:00Z"
+  },
+  {
+    "id": 2002,
+    "name": "Boston Celtics",
+    "league": "nba",
+    "record": "0-0",
+    "alias": "Celtics",
+    "abbreviation": "BOS",
+    "createdAt": "2025-01-10T00:00:00Z",
+    "updatedAt": "2026-09-18T00:00:00Z"
+  },
+  {
+    "id": 2003,
+    "name": "Golden State Warriors",
+    "league": "nba",
+    "record": "0-0",
+    "alias": "Warriors",
+    "abbreviation": "GSW",
+    "createdAt": "2025-01-10T00:00:00Z",
+    "updatedAt": "2026-09-18T00:00:00Z"
+  },
+  {
+    "id": 2004,
+    "name": "Denver Nuggets",
+    "league": "nba",
+    "record": "0-0",
+    "alias": "Nuggets",
+    "abbreviation": "DEN",
+    "createdAt": "2025-01-10T00:00:00Z",
+    "updatedAt": "2026-09-18T00:00:00Z"
+  },
+  {
+    "id": 2005,
+    "name": "Miami Heat",
+    "league": "nba",
+    "record": "0-0",
+    "alias": "Heat",
+    "abbreviation": "MIA",
+    "createdAt": "2025-01-10T00:00:00Z",
+    "updatedAt": "2026-09-18T00:00:00Z"
+  },
+  {
+    "id": 2006,
+    "name": "New York Knicks",
+    "league": "nba",
+    "record": "0-0",
+    "alias": "Knicks",
+    "abbreviation": "NYK",
+    "createdAt": "2025-01-10T00:00:00Z",
+    "updatedAt": "2026-09-18T00:00:00Z"
+  },
+  {
+    "id": 2007,
+    "name": "Oklahoma City Thunder",
+    "league": "nba",
+    "record": "0-0",
+    "alias": "Thunder",
+    "abbreviation": "OKC",
+    "createdAt": "2025-01-10T00:00:00Z",
+    "updatedAt": "2026-09-18T00:00:00Z"
+  },
+  {
+    "id": 2008,
+    "name": "Milwaukee Bucks",
+    "league": "nba",
+    "record": "0-0",
+    "alias": "Bucks",
+    "abbreviation": "MIL",
+    "createdAt": "2025-01-10T00:00:00Z",
+    "updatedAt": "2026-09-18T00:00:00Z"
+  }
+]

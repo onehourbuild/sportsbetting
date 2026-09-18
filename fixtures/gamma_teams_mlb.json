@@ -1,0 +1,82 @@
+[
+  {
+    "id": 3001,
+    "name": "New York Yankees",
+    "league": "mlb",
+    "record": "88-64",
+    "alias": "Yankees",
+    "abbreviation": "NYY",
+    "createdAt": "2025-01-10T00:00:00Z",
+    "updatedAt": "2026-09-18T00:00:00Z"
+  },
+  {
+    "id": 3002,
+    "name": "Los Angeles Dodgers",
+    "league": "mlb",
+    "record": "92-60",
+    "alias": "Dodgers",
+    "abbreviation": "LAD",
+    "createdAt": "2025-01-10T00:00:00Z",
+    "updatedAt": "2026-09-18T00:00:00Z"
+  },
+  {
+    "id": 3003,
+    "name": "Athletics",
+    "league": "mlb",
+    "record": "70-82",
+    "alias": "Athletics",
+    "abbreviation": "ATH",
+    "createdAt": "2025-01-10T00:00:00Z",
+    "updatedAt": "2026-09-18T00:00:00Z"
+  },
+  {
+    "id": 3004,
+    "name": "Seattle Mariners",
+    "league": "mlb",
+    "record": "84-68",
+    "alias": "Mariners",
+    "abbreviation": "SEA",
+    "createdAt": "2025-01-10T00:00:00Z",
+    "updatedAt": "2026-09-18T00:00:00Z"
+  },
+  {
+    "id": 3005,
+    "name": "Baltimore Orioles",
+    "league": "mlb",
+    "record": "73-79",
+    "alias": "Orioles",
+    "abbreviation": "BAL",
+    "createdAt": "2025-01-10T00:00:00Z",
+    "updatedAt": "2026-09-18T00:00:00Z"
+  },
+  {
+    "id": 3006,
+    "name": "Toronto Blue Jays",
+    "league": "mlb",
+    "record": "86-66",
+    "alias": "Blue Jays",
+    "abbreviation": "TOR",
+    "createdAt": "2025-01-10T00:00:00Z",
+    "updatedAt": "2026-09-18T00:00:00Z"
+  },
+  {
+    "id": 3007,
+    "name": "Houston Astros",
+    "league": "mlb",
+    "record": "83-69",
+    "alias": "Astros",
+    "abbreviation": "HOU",
+    "createdAt": "2025-01-10T00:00:00Z",
+    "updatedAt": "2026-09-18T00:00:00Z"
+  },
+  {
+    "id": 3008,
+    "name": "Atlanta Braves",
+    "league": "mlb",
+    "record": "80-72",
+    "alias": "Braves",
+    "abbreviation": "ATL",
+    "createdAt": "2025-01-10T00:00:00Z",
+    "updatedAt": "2026-09-18T00:00:00Z"
+  }
+]

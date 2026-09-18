@@ -1,0 +1,26 @@
+{% import "partials/macros.html" as m %}
+<div id="edges-list" class="edges-list" data-league="{{ league }}">
+  {% if scan is none %}
+  <section class="card empty">
+    <h2>No scans yet</h2>
+    <p><strong>Refresh Polymarket</strong> pulls the live NFL, NBA and MLB markets and order books
+      (free) and re-prices them against the last sportsbook snapshot.</p>
+    <p><strong>Refresh Books</strong> pulls fresh sportsbook lines from the Odds API first
+      (costs credits{% if books_cost is not none %}: {{ books_cost }} per refresh{% endif %}), then does the same.</p>
+    {% if demo_mode %}
+    <p class="muted">Demo mode is on: both buttons use the built-in synthetic fixtures, so no
+      network or API key is needed.</p>
+    {% else %}
+    <p class="muted">Tip: set <code>DEMO_MODE=true</code> to try every screen with synthetic fixture data.</p>
+    {% endif %}
+  </section>
+  {% elif not rows %}
+  <section class="card empty">
+    <p>No edges &ge; {{ prefs.min_edge|pct }}{% if league != 'all' %} in {{ league|upper }}{% endif %} in the scan from {{ scan.started_at|ago }}.</p>
+    <p class="muted small">{{ scan.n_matched }} of {{ scan.n_markets }} markets matched a book game. Refresh to re-price, or lower the minimum edge in Settings.</p>
+  </section>
+  {% else %}
+  <p class="muted small list-meta">{{ rows|length }} edge{{ '' if rows|length == 1 else 's' }} &ge; {{ prefs.min_edge|pct }} · scan {{ scan.started_at|ago }}</p>
+  {% for row in rows %}{{ m.opp_card(row) }}{% endfor %}
+  {% endif %}
+</div>

@@ -6,7 +6,7 @@
   <title>{% block title %}{{ app_name }}{% endblock %}</title>
   <meta name="description" content="Polymarket edge finder for NFL, NBA and MLB.">
   <meta name="theme-color" content="#0b0f14">
-  <meta name="color-scheme" content="dark">
+  <meta name="color-scheme" content="dark light">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -20,6 +20,7 @@
   {% block head %}{% endblock %}
 </head>
 <body hx-boost="false">
+  <a class="skip-link" href="#main">Skip to content</a>
   <header class="topbar">
     <a class="brand" href="/">{{ app_name }}</a>
     <div class="topbar-right">{% block topbar_right %}{% endblock %}</div>
@@ -31,20 +32,21 @@
 
   <nav class="bottom-nav" aria-label="Primary">
     {% set path = request.url.path %}
-    <a href="/" class="nav-item{% if path == '/' or path.startswith('/games') %} active{% endif %}">
+    <a href="/" class="nav-item{% if path == '/' or path.startswith('/games') %} active{% endif %}"{% if path == '/' or path.startswith('/games') %} aria-current="page"{% endif %}>
       <span class="nav-icon" aria-hidden="true">&#9650;</span><span>Edges</span>
     </a>
-    <a href="/bets" class="nav-item{% if path.startswith('/bets') %} active{% endif %}">
+    <a href="/bets" class="nav-item{% if path.startswith('/bets') %} active{% endif %}"{% if path.startswith('/bets') %} aria-current="page"{% endif %}>
       <span class="nav-icon" aria-hidden="true">&#9776;</span><span>Bets</span>
     </a>
-    <a href="/settings" class="nav-item{% if path.startswith('/settings') %} active{% endif %}">
+    <a href="/settings" class="nav-item{% if path.startswith('/settings') %} active{% endif %}"{% if path.startswith('/settings') %} aria-current="page"{% endif %}>
       <span class="nav-icon" aria-hidden="true">&#9881;</span><span>Settings</span>
     </a>
-    <a href="/diagnostics" class="nav-item{% if path.startswith('/diagnostics') %} active{% endif %}">
+    <a href="/diagnostics" class="nav-item{% if path.startswith('/diagnostics') %} active{% endif %}"{% if path.startswith('/diagnostics') %} aria-current="page"{% endif %}>
       <span class="nav-icon" aria-hidden="true">&#9673;</span><span>Diag</span>
     </a>
   </nav>
 
+  <div id="sheet" class="sheet"></div>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <script>

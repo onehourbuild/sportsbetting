@@ -1,0 +1,22 @@
+<section id="ledger-summary" class="tiles" aria-label="Ledger summary">
+  {% if summary %}
+  <div class="tile"><span class="tile-label">Open</span><span class="tile-value">{{ summary.n_open if summary.n_open is not none else '—' }}</span></div>
+  <div class="tile"><span class="tile-label">Settled</span><span class="tile-value">{{ summary.n_settled if summary.n_settled is not none else '—' }}</span>
+    <span class="tile-sub">{{ summary.n_won or 0 }}W · {{ summary.n_lost or 0 }}L</span></div>
+  <div class="tile"><span class="tile-label">P&amp;L</span>
+    <span class="tile-value {{ 'good' if (summary.total_pnl or 0) > 0 else ('bad' if (summary.total_pnl or 0) < 0 else '') }}">{{ summary.total_pnl|usd }}</span>
+    <span class="tile-sub">staked {{ summary.total_staked|usd(0) }}</span></div>
+  <div class="tile"><span class="tile-label">ROI</span>
+    <span class="tile-value {{ 'good' if (summary.roi or 0) > 0 else ('bad' if (summary.roi or 0) < 0 else '') }}">{{ summary.roi|signed_pct }}</span></div>
+  <div class="tile"><span class="tile-label">Avg CLV</span>
+    <span class="tile-value {{ 'good' if (summary.avg_clv or 0) > 0 else ('bad' if (summary.avg_clv or 0) < 0 else '') }}">{{ summary.avg_clv|signed_pct }}</span></div>
+  <div class="tile"><span class="tile-label">CLV+</span>
+    <span class="tile-value">{{ summary.n_clv_positive if summary.n_clv_positive is not none else '—' }} / {{ summary.n_clv_recorded if summary.n_clv_recorded is not none else '—' }}</span>
+    <span class="tile-sub">bets beating the close</span></div>
+  {% else %}
+  {% for label in ('Open', 'Settled', 'P&L', 'ROI', 'Avg CLV', 'CLV+') %}
+  <div class="tile"><span class="tile-label">{{ label }}</span><span class="tile-value">—</span></div>
+  {% endfor %}
+  <p class="muted small tiles-note">Ledger summary unavailable.</p>
+  {% endif %}
+</section>

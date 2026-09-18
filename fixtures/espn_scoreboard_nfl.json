@@ -1,0 +1,288 @@
+{
+  "leagues": [
+    {
+      "id": "28",
+      "uid": "s:20~l:28",
+      "name": "National Football League",
+      "abbreviation": "NFL",
+      "slug": "nfl",
+      "season": {
+        "year": 2026,
+        "type": 2,
+        "slug": "regular-season"
+      }
+    }
+  ],
+  "season": {
+    "type": 2,
+    "year": 2026
+  },
+  "day": {
+    "date": "2026-09-20"
+  },
+  "events": [
+    {
+      "id": "401772102",
+      "uid": "s:20~l:28~e:401772102",
+      "date": "2026-09-20T17:00Z",
+      "name": "Dallas Cowboys at Philadelphia Eagles",
+      "shortName": "DAL @ PHI",
+      "competitions": [
+        {
+          "id": "401772102",
+          "uid": "s:20~l:28~e:401772102~c:401772102",
+          "date": "2026-09-20T17:00Z",
+          "attendance": 0,
+          "type": {
+            "id": "1",
+            "abbreviation": "STD"
+          },
+          "timeValid": true,
+          "neutralSite": false,
+          "conferenceCompetition": false,
+          "playByPlayAvailable": false,
+          "recent": false,
+          "venue": {
+            "id": "3806",
+            "fullName": "Lincoln Financial Field",
+            "address": {
+              "city": "Philadelphia",
+              "state": "PA"
+            },
+            "indoor": false
+          },
+          "competitors": [
+            {
+              "id": "21",
+              "uid": "s:20~l:28~t:21",
+              "type": "team",
+              "order": 0,
+              "homeAway": "home",
+              "team": {
+                "id": "21",
+                "uid": "s:20~l:28~t:21",
+                "location": "Philadelphia",
+                "name": "Eagles",
+                "abbreviation": "PHI",
+                "displayName": "Philadelphia Eagles",
+                "shortDisplayName": "Eagles",
+                "isActive": true
+              },
+              "score": "0"
+            },
+            {
+              "id": "6",
+              "uid": "s:20~l:28~t:6",
+              "type": "team",
+              "order": 1,
+              "homeAway": "away",
+              "team": {
+                "id": "6",
+                "uid": "s:20~l:28~t:6",
+                "location": "Dallas",
+                "name": "Cowboys",
+                "abbreviation": "DAL",
+                "displayName": "Dallas Cowboys",
+                "shortDisplayName": "Cowboys",
+                "isActive": true
+              },
+              "score": "0"
+            }
+          ],
+          "status": {
+            "clock": 0.0,
+            "displayClock": "0:00",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Sun, September 20th at 1:00 PM EDT",
+              "shortDetail": "Sun, September 20th at 1:00 PM EDT"
+            }
+          },
+          "odds": [
+            {
+              "provider": {
+                "id": "58",
+                "name": "ESPN BET",
+                "priority": 1
+              },
+              "details": "PHI -4.5",
+              "overUnder": 44.5,
+              "awayTeamOdds": {
+                "favorite": false,
+                "underdog": true,
+                "moneyLine": 170,
+                "spreadOdds": -110,
+                "team": {
+                  "id": "6",
+                  "abbreviation": "DAL"
+                }
+              },
+              "homeTeamOdds": {
+                "favorite": true,
+                "underdog": false,
+                "moneyLine": -200,
+                "spreadOdds": -110,
+                "team": {
+                  "id": "21",
+                  "abbreviation": "PHI"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "status": {
+        "clock": 0.0,
+        "displayClock": "0:00",
+        "period": 0,
+        "type": {
+          "id": "1",
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false,
+          "description": "Scheduled",
+          "detail": "Sun, September 20th at 1:00 PM EDT",
+          "shortDetail": "Sun, September 20th at 1:00 PM EDT"
+        }
+      }
+    },
+    {
+      "id": "401772101",
+      "uid": "s:20~l:28~e:401772101",
+      "date": "2026-09-20T20:25Z",
+      "name": "Kansas City Chiefs at Buffalo Bills",
+      "shortName": "KC @ BUF",
+      "competitions": [
+        {
+          "id": "401772101",
+          "uid": "s:20~l:28~e:401772101~c:401772101",
+          "date": "2026-09-20T20:25Z",
+          "attendance": 0,
+          "type": {
+            "id": "1",
+            "abbreviation": "STD"
+          },
+          "timeValid": true,
+          "neutralSite": false,
+          "conferenceCompetition": false,
+          "playByPlayAvailable": false,
+          "recent": false,
+          "venue": {
+            "id": "3883",
+            "fullName": "Highmark Stadium",
+            "address": {
+              "city": "Orchard Park",
+              "state": "NY"
+            },
+            "indoor": false
+          },
+          "competitors": [
+            {
+              "id": "2",
+              "uid": "s:20~l:28~t:2",
+              "type": "team",
+              "order": 0,
+              "homeAway": "home",
+              "team": {
+                "id": "2",
+                "uid": "s:20~l:28~t:2",
+                "location": "Buffalo",
+                "name": "Bills",
+                "abbreviation": "BUF",
+                "displayName": "Buffalo Bills",
+                "shortDisplayName": "Bills",
+                "isActive": true
+              },
+              "score": "0"
+            },
+            {
+              "id": "12",
+              "uid": "s:20~l:28~t:12",
+              "type": "team",
+              "order": 1,
+              "homeAway": "away",
+              "team": {
+                "id": "12",
+                "uid": "s:20~l:28~t:12",
+                "location": "Kansas City",
+                "name": "Chiefs",
+                "abbreviation": "KC",
+                "displayName": "Kansas City Chiefs",
+                "shortDisplayName": "Chiefs",
+                "isActive": true
+              },
+              "score": "0"
+            }
+          ],
+          "status": {
+            "clock": 0.0,
+            "displayClock": "0:00",
+            "period": 0,
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Sun, September 20th at 4:25 PM EDT",
+              "shortDetail": "Sun, September 20th at 4:25 PM EDT"
+            }
+          },
+          "odds": [
+            {
+              "provider": {
+                "id": "58",
+                "name": "ESPN BET",
+                "priority": 1
+              },
+              "details": "KC -3.5",
+              "overUnder": 47.5,
+              "awayTeamOdds": {
+                "favorite": true,
+                "underdog": false,
+                "moneyLine": -150,
+                "spreadOdds": -110,
+                "team": {
+                  "id": "12",
+                  "abbreviation": "KC"
+                }
+              },
+              "homeTeamOdds": {
+                "favorite": false,
+                "underdog": true,
+                "moneyLine": 130,
+                "spreadOdds": -110,
+                "team": {
+                  "id": "2",
+                  "abbreviation": "BUF"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "status": {
+        "clock": 0.0,
+        "displayClock": "0:00",
+        "period": 0,
+        "type": {
+          "id": "1",
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false,
+          "description": "Scheduled",
+          "detail": "Sun, September 20th at 4:25 PM EDT",
+          "shortDetail": "Sun, September 20th at 4:25 PM EDT"
+        }
+      }
+    }
+  ],
+  "week": {
+    "number": 3
+  }
+}

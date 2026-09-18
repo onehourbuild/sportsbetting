@@ -1,15 +1,17 @@
 {% extends "base.html" %}
+{% import "partials/macros.html" as m %}
 {% block title %}Edges · {{ app_name }}{% endblock %}
+{% block topbar_right %}
+  {% if last_scan %}<span class="muted small">scan {{ last_scan.started_at|ago }}</span>{% endif %}
+  {{ m.quota_badge(quota, has_odds_key, demo_mode, compact=true) }}
+{% endblock %}
 {% block content %}
 <h1 class="page-title">Edges</h1>
-<div class="chips">
-  {% for league in LEAGUES %}<span class="chip">{{ league|upper }}</span>{% endfor %}
-</div>
-<section class="card">
-  <p class="muted">No scan yet. Refresh Polymarket to find opportunities.</p>
-  <div class="row">
-    <button class="btn btn-primary" disabled>Refresh Polymarket</button>
-    <button class="btn" disabled>Refresh Books</button>
-  </div>
-</section>
+{% include "partials/scan_status.html" %}
+<nav class="chips" aria-label="League filter">
+  {% for item in league_filters %}
+  <a class="chip{% if item == league %} active{% endif %}" href="/?league={{ item }}"{% if item == league %} aria-current="page"{% endif %}>{{ 'All' if item == 'all' else item|upper }}</a>
+  {% endfor %}
+</nav>
+{% include "partials/edges_list.html" %}
 {% endblock %}

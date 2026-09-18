@@ -1,8 +1,111 @@
 {% extends "base.html" %}
-{% block title %}Game · {{ app_name }}{% endblock %}
+{% import "partials/macros.html" as m %}
+{% block title %}{{ game.away_key or game.away_name }} @ {{ game.home_key or game.home_name }} · {{ app_name }}{% endblock %}
 {% block content %}
-<h1 class="page-title">Game {{ game_id }}</h1>
-<section class="card">
-  <p class="muted">Game detail placeholder. Markets, per-book probabilities and depth appear here.</p>
+<a class="back-link" href="/">&lsaquo; Edges</a>
+<header class="card game-head">
+  <div class="row">
+    {{ m.league_badge(game.league) }}
+    <span class="badge">{{ game.status }}</span>
+  </div>
+  <h1 class="game-title">{{ game.away_name or game.away_key }} <span class="muted">@</span> {{ game.home_name or game.home_key }}</h1>
+  <p class="muted">
+    <time datetime="{{ start_iso }}" data-local>{{ game.start_time|dt_short }}</time>
+    {% if game.start_time %}<span aria-hidden="true">·</span> {{ game.start_time|ago }}{% endif %}
+  </p>
+  <div class="row">
+    {% if pm_url %}<a class="btn btn-sm" href="{{ pm_url }}" target="_blank" rel="noopener noreferrer">Open on Polymarket</a>{% endif %}
+    <span class="muted small">{{ markets|length }} market{{ '' if markets|length == 1 else 's' }}</span>
+  </div>
+</header>
+
+{% if not markets %}
+<section class="card empty"><p class="muted">No markets stored for this game yet. Run a Polymarket refresh.</p></section>
+{% endif %}
+
+{% for mv in markets %}
+<section class="card market" id="market-{{ mv.market.id }}">
+  <h2 class="market-title">{{ mv.label }}
+    {% if mv.market.closed %}<span class="badge">closed</span>{% endif %}
+    {% if not mv.market.accepting_orders and not mv.market.closed %}<span class="badge badge-warn">paused</span>{% endif %}
+  </h2>
+  <p class="muted small mono">liq {{ mv.market.liquidity|usd(0) }} · vol {{ mv.market.volume|usd(0) }} · tick {{ mv.market.tick_size if mv.market.tick_size is not none else '—' }}</p>
+
+  <div class="outcomes">
+    {% for o in mv.outcomes %}
+    <div class="outcome{% if o.opp %} has-edge{% endif %}">
+      <div class="outcome-head">
+        <strong>{{ o.side }}</strong>
+        {% if mv.market.resolved_outcome == o.letter %}<span class="badge badge-good">won</span>
+        {% elif mv.market.resolved_outcome %}<span class="badge badge-bad">lost</span>{% endif %}
+        {% if o.opp %}<span class="badge badge-good">edge {{ o.opp.edge|signed_pct }}</span>{% endif %}
+      </div>
+      {% if o.quote %}
+      <dl class="metrics metrics-3">
+        <div><dt>Bid</dt><dd>{{ o.quote.best_bid|cents }}</dd></div>
+        <div><dt>Ask</dt><dd>{{ o.quote.best_ask|cents }}</dd></div>
+        <div><dt>Mid</dt><dd>{{ o.quote.mid|cents }}</dd></div>
+      </dl>
+      <p class="muted small">quote {{ o.quote.fetched_at|ago }}</p>
+      {% else %}
+      <p class="muted small">No Polymarket quote stored.</p>
+      {% endif %}
+
+      {% if o.opp %}
+      <dl class="metrics metrics-4">
+        <div><dt>Fair</dt><dd>{{ o.opp.fair_prob|pct }}</dd></div>
+        <div><dt>EV</dt><dd>{{ o.opp.ev_per_dollar|signed_pct }}</dd></div>
+        <div><dt>Stake</dt><dd>{{ o.opp.suggested_stake|usd }}</dd></div>
+        <div><dt>Books</dt><dd>{{ o.opp.n_books }}</dd></div>
+        <div><dt>Cost</dt><dd>{{ o.opp.effective_price|cents }}</dd></div>
+        <div><dt>Fill</dt><dd>{{ o.opp.fill_price|cents }}</dd></div>
+        <div><dt>Limit</dt><dd>{{ o.opp.limit_price|cents }}</dd></div>
+        <div><dt>Method</dt><dd>{{ o.opp.fair_method }}</dd></div>
+      </dl>
+      <button class="btn btn-primary btn-sm" type="button"
+              hx-get="/bets/new?opportunity_id={{ o.opp.id }}" hx-target="#sheet" hx-swap="innerHTML">Log bet</button>
+      {% else %}
+      <p class="muted small">Limit price — <span class="muted">(no edge in the latest scan)</span></p>
+      {% endif %}
+
+      {% if o.asks %}
+      <details class="depth" open>
+        <summary>Ask depth (top {{ o.asks|length }})</summary>
+        <table class="depth-table">
+          <thead><tr><th>Price</th><th class="num">Shares</th><th class="num">Cum. $</th></tr></thead>
+          <tbody>
+          {% for lv in o.asks %}
+            <tr><td class="mono">{{ lv.price|cents }}</td><td class="num">{{ '%.0f'|format(lv.size) }}</td><td class="num">{{ lv.cum_usd|usd(0) }}</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </details>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+
+  <h3 class="sub">Books <span class="muted">({{ mv.book_key }})</span></h3>
+  {% if mv.book_rows %}
+  <div class="table-wrap">
+    <table class="book-table">
+      <thead>
+        <tr><th>Book</th><th class="num">{{ mv.outcomes[0].name }}</th><th class="num">{{ mv.outcomes[1].name }}</th></tr>
+      </thead>
+      <tbody>
+      {% for br in mv.book_rows %}
+        <tr>
+          <td>{{ br.bookmaker }}{% if br.stale %} <span class="badge badge-warn">stale</span>{% endif %}</td>
+          <td class="num">{{ br.a_text }}</td>
+          <td class="num">{{ br.b_text }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted small">No book quotes stored for this market. Run a Books refresh.</p>
+  {% endif %}
 </section>
+{% endfor %}
 {% endblock %}

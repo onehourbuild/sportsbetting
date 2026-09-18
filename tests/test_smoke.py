@@ -56,12 +56,18 @@ def test_login_ok_then_home_is_200(anon_client: TestClient) -> None:
     assert "Edges" in home.text
 
 
-def test_every_placeholder_screen_renders_when_logged_in(client: TestClient) -> None:
-    for path in ("/", "/games/1", "/bets", "/settings", "/diagnostics"):
+def test_every_screen_renders_when_logged_in(client: TestClient) -> None:
+    for path in ("/", "/bets", "/settings", "/diagnostics"):
         response = client.get(path)
         assert response.status_code == 200, path
         assert "bottom-nav" in response.text, path
         assert 'href="/manifest.webmanifest"' in response.text, path
+
+
+def test_missing_game_is_404_page(client: TestClient) -> None:
+    response = client.get("/games/999999")
+    assert response.status_code == 404
+    assert "text/html" in response.headers.get("content-type", "")
 
 
 def test_logout_clears_session(client: TestClient) -> None:
