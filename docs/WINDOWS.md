@@ -15,6 +15,53 @@ desktop is off, the phone shows the offline page.
 
 ---
 
+## The short way: one command
+
+Open PowerShell **as Administrator** (right-click the Start button → *Terminal
+(Admin)*) and paste this:
+
+```powershell
+winget install Git.Git --exact --silent --accept-package-agreements
+$d = "$env:TEMP\edge-setup"
+Remove-Item -Recurse -Force $d -ErrorAction SilentlyContinue
+git clone --branch claude/trusting-ramanujan-ht0xeg https://github.com/onehourbuild/sportsbetting $d
+& "$d\scripts\setup-windows.ps1"
+```
+
+(The first line is a no-op if Git is already there. If PowerShell says `git` isn't
+recognised straight after it, close the window, open a new admin one, and paste the rest
+— a fresh install only reaches a new session's PATH.)
+
+That installs Git, Python 3.11 and Tailscale if they're missing, clones the app to
+`C:\apps\sportsbetting`, builds the virtualenv from the hashed lockfile, generates your
+password and secret key, writes `.env`, registers a scheduled task so it starts with the
+machine, disables sleep, starts it, waits until it answers, and publishes it on your
+tailnet. It prints your URL and password at the end. Re-running it is safe — it skips
+whatever is already done and never overwrites an existing `.env`.
+
+Pass your Odds API key if you have one:
+
+```powershell
+& "$d\scripts\setup-windows.ps1" -OddsApiKey 'your-key'
+```
+
+**Three things the script cannot do for you**, because they're your identity rather than
+configuration. It stops and tells you when each is due:
+
+1. **Sign in to Tailscale.** A browser window opens; use the account you'll also use on
+   the phone.
+2. **Enable HTTPS Certificates** at
+   [login.tailscale.com/admin/dns](https://login.tailscale.com/admin/dns) (also turn on
+   MagicDNS). This is the one toggle that matters most — without a valid certificate iOS
+   won't offer "Add to Home Screen" at all.
+3. **On the phone:** install Tailscale, sign in, then open your URL in Safari and tap
+   Share → Add to Home Screen.
+
+Everything below is the same thing done by hand, in case a step fails or you'd rather
+see what's happening.
+
+---
+
 ## 1. Install Python 3.11
 
 ```powershell

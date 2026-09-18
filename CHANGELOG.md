@@ -108,3 +108,12 @@
   Scheduler. Covers the prod-on-your-own-machine settings (`APP_ENV=prod` for the Secure
   cookie, `TRUSTED_PROXY_HEADER=x-forwarded-for` because Tailscale proxies from loopback)
   and what the scheduler costs in Odds API credits once the host never sleeps.
+- `scripts/setup-windows.ps1`: one admin-PowerShell command does the whole Windows
+  install — winget for Git/Python/Tailscale, clone, venv from the hashed lockfile, a
+  generated passphrase and secret key written to a BOM-free `.env` (a UTF-8 BOM makes
+  pydantic read `\ufeffAPP_ENV` and silently start in dev), the scheduled task, sleep
+  disabled, a health-check wait, then `tailscale serve`. Idempotent; never overwrites an
+  existing `.env`. Paths use `Path::Combine` rather than `Join-Path`, which resolves its
+  argument through the PowerShell provider and throws on a drive that does not exist.
+  The three steps it cannot do — Tailscale sign-in, the HTTPS-certificates toggle, and
+  the phone — are called out where they fall.
