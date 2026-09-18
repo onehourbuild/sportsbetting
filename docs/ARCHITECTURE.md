@@ -295,8 +295,10 @@ class TransportError(Exception)   # message, status, url
 
 ```python
 GAMMA = "https://gamma-api.polymarket.com"; CLOB = "https://clob.polymarket.com"
+TeamResolver = Callable[[str, League], str | None]   # defaults to matching.team_key, imported lazily
 class PolymarketClient:
-    def __init__(self, transport: Transport, gamma_base=GAMMA, clob_base=CLOB) -> None
+    def __init__(self, transport: Transport, gamma_base=GAMMA, clob_base=CLOB,
+                 team_resolver: TeamResolver | None = None) -> None
     def events(self, league: League, *, include_closed: bool = False) -> tuple[list[PmMarket], list[dict]]
         # paginates /events?tag_slug=..; second item = unparseable markets [{market_id, question, reason}]
     def market(self, market_id: str) -> PmMarket | None          # GET /markets/{id}, for settlement
@@ -309,7 +311,8 @@ class PolymarketClient:
 ```python
 SPORT_KEYS = {"nfl": "americanfootball_nfl", "nba": "basketball_nba", "mlb": "baseball_mlb"}
 class OddsApiClient:
-    def __init__(self, transport: Transport, api_key: str, base="https://api.the-odds-api.com/v4") -> None
+    def __init__(self, transport: Transport, api_key: str, base="https://api.the-odds-api.com/v4",
+                 team_resolver: TeamResolver | None = None) -> None
     def odds(self, league: League, bookmakers: Sequence[str], markets=("h2h","spreads","totals"))
         -> tuple[list[BookGame], QuotaInfo]
     @staticmethod
@@ -320,10 +323,16 @@ class OddsApiClient:
 
 ```python
 class EspnClient:
+    def __init__(self, transport: Transport, base="https://site.api.espn.com/apis/site/v2/sports",
+                 team_resolver: TeamResolver | None = None) -> None
     def scoreboard(self, league: League, date: date | None = None) -> list[EspnGame]
     @staticmethod
     def to_book_games(games: Sequence[EspnGame]) -> list[BookGame]   # bookmaker "espn", h2h + spreads + totals when present
 ```
+
+Clients resolve team keys through the injected `team_resolver` so client tests
+can pass a dict-backed resolver and never depend on `matching.py`. Fixture
+data is defined in `docs/FIXTURES.md`.
 
 ## Hand-checked vectors (must appear in tests)
 
