@@ -9,7 +9,8 @@ places orders: you tap through to Polymarket to trade.
 The docs: `SPEC.md` (what it does), `docs/PHONE.md` (deploy it to Fly and put it on
 your phone), `docs/WINDOWS.md` (host it free on a Windows desktop over Tailscale
 instead), `docs/ARCHITECTURE.md` (module contract), `docs/RESEARCH.md` (API notes and
-the unverified list), `docs/DECISIONS.md` (why).
+the unverified list), `docs/DECISIONS.md` (why), `docs/HANDOFF.md` (current state and
+what to do next, for picking the build back up).
 
 ## Try it locally in two minutes (no keys, synthetic data)
 
