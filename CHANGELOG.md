@@ -1,6 +1,11 @@
 # CHANGELOG
 
 ## Unreleased — v1 build (2026-09-18)
+- `app/clients/polymarket_us_private.py`: Ed25519-signed reads of the owner's own .us
+  activity feed, behind `PM_US_API_KEY` / `PM_US_API_SECRET` in `.env` (both `SecretStr`,
+  both absent by default, importer off). Read-only by construction -- the module has no
+  code that places, cancels or sizes an order. Adds `cryptography`, checked for win_amd64
+  wheels before adding it.
 - `app/clients/polymarket_us.py`: keyless Polymarket US market data emitting the existing
   `PmMarket`, so matching and the edge math work unchanged. Reads the per-market
   `feeCoefficient` (0.0695), maps full-game winner/total, and **refuses every .us spread**

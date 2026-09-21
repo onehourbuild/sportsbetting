@@ -281,3 +281,15 @@ Polymarket ships two products and the app only knows about one of them.
   `outcomes` `["-6.50","+6.50"]`. Resolve the side by price against a known reference,
   not by the sign in the label.
 
+
+
+## Unverified: the .us signing payload
+
+`signature_for` signs `timestamp + method + path` with the path alone, no query string,
+because that is what the live notes of 2026-09-21 record. Whether the API includes the
+query string could not be settled here -- this environment cannot reach
+`api.polymarket.us`, and the account holder is the only person who can mint a key.
+
+This is a safe assumption to be wrong about. A bad signature fails authentication loudly
+and immediately; unlike a mis-parsed price it cannot quietly cost money. If the first live
+call returns 401, signing `path + "?" + urlencode(params)` is the next thing to try.
