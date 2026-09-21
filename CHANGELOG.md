@@ -1,6 +1,10 @@
 # CHANGELOG
 
 ## Unreleased — v1 build (2026-09-18)
+- requirements.lock is now resolved with `--universal`, so platform markers survive:
+  uvloop (no Windows wheel, setup.py refuses to build there) is excluded from Windows and
+  colorama is included for it. Guarded offline by tests/test_requirements_lock.py and
+  online by scripts/audit_lock_windows.py.
 - Windows scripts are ASCII-only, enforced by tests/test_windows_scripts.py: PowerShell
   5.1 reads a .ps1 as Windows-1252, so a UTF-8 em dash in a comment broke the parse before
   the first line ran. The same test pins the winget ids to their manifest spelling.

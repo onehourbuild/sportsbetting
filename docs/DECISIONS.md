@@ -2,6 +2,32 @@
 
 Each entry: date, decision, why, consequences.
 
+## 2026-09-21 - The lockfile resolves universally, not for the build machine
+`uv pip compile` without `--universal` resolves for the machine it runs on and
+drops the environment markers. Generated on Linux, that produced a lock which
+pinned `uvloop` unconditionally - a package that ships Linux and macOS wheels
+only, and whose setup.py raises "uvloop does not support Windows at the moment"
+- so pip fell through to building it from source and the Windows install died
+there. The same resolve also silently dropped `colorama`, which uvicorn needs
+for coloured output on Windows and nowhere else.
+
+`make lock` now passes `--universal`, so markers are preserved: uvloop carries
+`sys_platform != 'win32'` and colorama carries `sys_platform == 'win32'`.
+
+This was findable from Linux and was not found, so it gets two guards.
+`tests/test_requirements_lock.py` is offline and runs in CI: it reads uv's own
+recorded command out of the lock header to confirm `--universal`, and checks
+the two markers directly. `scripts/audit_lock_windows.py` is the online half,
+run by hand after a dependency change: it asks PyPI whether every locked
+version ships something installable on win_amd64 - a win_amd64 wheel or a
+pure-python one - and names anything that would force a source build. Run
+against the old lock it reports uvloop with macOS and manylinux wheels only;
+against the new one, 38 of 38 installable.
+
+Consequence: the lock is bigger, since it carries pins for platforms this
+project does not deploy to. That is the cost of a lock that is true everywhere
+it is used rather than only where it was made.
+
 ## 2026-09-21 - The Windows scripts are ASCII-only, enforced by a test
 An em dash in a comment killed the installer before its first line ran. Windows
 PowerShell 5.1 - the one every Windows machine ships with, and the one the
