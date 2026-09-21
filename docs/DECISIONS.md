@@ -76,6 +76,37 @@ problem.
 Consequence: a missing tool now produces one accurate error naming the tool and
 saying the script is safe to re-run, instead of two contradictory ones.
 
+## 2026-09-21 - The .us client refuses spreads rather than guess a side
+On polymarket.us the market titled "Los Angeles Rams wins by over 6.5 points"
+carries the question "Will the New York Giants cover 6.5 points?" and outcomes
+["-6.50", "+6.50"]. Title, question and outcomes disagree about whose side is
+whose, and no two of them can be reconciled without a live payload to anchor on.
+
+Getting that wrong does not produce a smaller edge or a missing row. It
+recommends the opposite team, at a price that looks right, with a stake sized
+confidently, and stays invisible until settlement. Of everything this app can
+get wrong, it is the most expensive, so the client declines every .us spread and
+says why, on the Diagnostics page. Moneylines and totals parse: both outcomes of
+a moneyline must resolve to the event's own two teams, and a total's labels must
+be recognisably Over/Under, or those are refused too.
+
+The client emits the existing `PmMarket` rather than a parallel type, so
+matching, the edge math, sizing, the ledger and the forward test all work
+unchanged and the venue is a data-source choice rather than a second pipeline.
+.us has no `conditionId` and no CLOB token id, so the `marketSlug` is the
+identity and token ids are synthesised as `<slug>#<index>` - stable across scans,
+which is all the ledger asks of them.
+
+This could not be verified against a live endpoint: the build environment cannot
+reach gateway.polymarket.us. The fixtures are built from shapes recorded off
+live responses on the owner's machine (docs/RESEARCH.md, "Verified live
+2026-09-21"), and the tests assert as much about what is refused as about what
+is parsed, because a refusal is a thing nobody can lose money on.
+
+Consequence: .us coverage is deliberately partial. The owner's own two open
+positions are a spread and a second-half line, so neither would be priced today.
+Extending to spreads needs one live payload to anchor the mapping, not a guess.
+
 ## 2026-09-21 - The venue owns the taker fee, because the two exchanges differ
 Polymarket is two products. polymarket.com blocks US residents from trading;
 polymarket.us is the regulated US exchange, and its taker fee coefficient is

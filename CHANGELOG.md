@@ -1,6 +1,11 @@
 # CHANGELOG
 
 ## Unreleased — v1 build (2026-09-18)
+- `app/clients/polymarket_us.py`: keyless Polymarket US market data emitting the existing
+  `PmMarket`, so matching and the edge math work unchanged. Reads the per-market
+  `feeCoefficient` (0.0695), maps full-game winner/total, and **refuses every .us spread**
+  because its title, question and outcomes disagree about which team each side is -- a
+  wrong answer there recommends the opposite team. Refusals surface on Diagnostics.
 - `venue` preference (Polymarket US / Polymarket) owning the taker fee: .us charges 0.0695,
   .com 0.05, and a fee left at the wrong one's number overstates every edge. Switching
   venue carries an untouched fee with it; a rate the owner chose is left alone. Settings
