@@ -76,6 +76,41 @@ problem.
 Consequence: a missing tool now produces one accurate error naming the tool and
 saying the script is safe to re-run, instead of two contradictory ones.
 
+## 2026-09-21 - The venue owns the taker fee, because the two exchanges differ
+Polymarket is two products. polymarket.com blocks US residents from trading;
+polymarket.us is the regulated US exchange, and its taker fee coefficient is
+0.0695 against 0.05 on .com - verified across all 814 markets of one NFL game.
+The owner trades .us, so the app was pricing their edges with the wrong
+exchange's fee.
+
+This is not cosmetic. At a 50c price, 0.05 costs 1.25c a share and 0.0695 costs
+1.74c. The half-cent gap is most of a 2% edge, so a .us account priced at the
+.com fee sees edges that are not there - the same failure mode this file already
+records from the near-zero fee override, arriving by a different route.
+
+So `venue` is a preference, and it owns the fee default. Changing venue carries
+the fee with it when the stored rate still equals the *old* venue's published
+number, because a rate nobody chose is not a decision; a rate the owner set
+themselves is left alone. The Settings page says which venue charges what and
+warns when the stored fee disagrees with the selected venue, rather than
+silently correcting a number on a page they are editing.
+
+`reconcile_venue_fee` handles databases written before any of this existed: the
+column appearing in `add_missing_columns`' return is the signal that the row
+predates the preference, so a fee still exactly equal to the old 0.05 default is
+corrected to the venue's rate. Only that exact value; anything else was chosen.
+
+The default venue stays `polymarket_com`, which is the exchange the market-data
+client actually reads. Defaulting to .us today would price .com data while
+claiming .us fees - a worse lie than the one it fixes. It flips when the .us
+client lands; a US owner picks .us in Settings meanwhile, and the fee follows.
+
+Consequence: the synthetic fixture slate is a .com slate and stays priced at
+0.05. Two of its four expected opportunities sit between the two fee levels, so
+a careless default flip silently empties half the test slate - which is exactly
+what happened while writing this, and is the reason the default is pinned to the
+data source rather than to the owner.
+
 ## 2026-09-21 — The Windows install bootstraps over HTTP, not git
 The first real run of the documented one-liner failed three ways at once, and
 all three were in the instructions rather than the installer. Windows checks

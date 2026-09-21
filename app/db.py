@@ -4,12 +4,19 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from collections.abc import Generator
+from collections.abc import Generator, Sequence
 from pathlib import Path
 
 from sqlalchemy import MetaData, create_engine, event
 from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+
+logger = logging.getLogger(__name__)
+
+# The taker fee this app hard-coded before it knew Polymarket was two exchanges. A stored
+# rate still exactly equal to this is a default nobody chose, not a decision; see
+# `reconcile_venue_fee`.
+LEGACY_TAKER_FEE_RATE = 0.05
 
 log = logging.getLogger(__name__)
 
@@ -138,7 +145,47 @@ def init_db(engine: Engine) -> None:
     from app import models  # noqa: F401  (register tables on Base.metadata)
 
     Base.metadata.create_all(engine)
-    add_missing_columns(engine)
+    added = add_missing_columns(engine)
+    reconcile_venue_fee(engine, added)
+
+
+def reconcile_venue_fee(engine: Engine, added_columns: Sequence[str]) -> bool:
+    """One-time correction for a database written before the venue preference existed.
+
+    `prefs.venue` showing up in `added_columns` means this row predates the app knowing
+    that Polymarket is two exchanges. Its `taker_fee_rate` was therefore never a choice
+    between them -- it is the old hard-coded 0.05, which is the .com rate. On a .us account
+    that understates the fee by 39% and shows up as edge that is not there, which is the
+    failure mode `docs/DECISIONS.md` already records as the expensive one.
+
+    A rate the owner had deliberately changed is left alone: only a value still exactly
+    equal to the old default counts as "never set". Returns whether anything changed.
+    """
+    if "prefs.venue" not in set(added_columns):
+        return False
+
+    from app.models import VENUE_TAKER_FEE, Prefs
+
+    changed = False
+    with Session(engine) as session:
+        for prefs in session.query(Prefs).all():
+            expected = VENUE_TAKER_FEE.get(prefs.venue)
+            if expected is None or prefs.taker_fee_rate != LEGACY_TAKER_FEE_RATE:
+                continue
+            if expected == LEGACY_TAKER_FEE_RATE:
+                continue
+            logger.info(
+                "prefs %s: venue %s charges %.4f, not the pre-venue default %.4f; correcting",
+                prefs.id,
+                prefs.venue,
+                expected,
+                LEGACY_TAKER_FEE_RATE,
+            )
+            prefs.taker_fee_rate = expected
+            changed = True
+        if changed:
+            session.commit()
+    return changed
 
 
 def add_missing_columns(engine: Engine) -> list[str]:

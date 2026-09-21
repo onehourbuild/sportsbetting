@@ -1,6 +1,10 @@
 # CHANGELOG
 
 ## Unreleased — v1 build (2026-09-18)
+- `venue` preference (Polymarket US / Polymarket) owning the taker fee: .us charges 0.0695,
+  .com 0.05, and a fee left at the wrong one's number overstates every edge. Switching
+  venue carries an untouched fee with it; a rate the owner chose is left alone. Settings
+  warns on a mismatch, and databases written before the preference are corrected once.
 
 ### Polymarket US found (2026-09-21)
 - `docs/STATUS-2026-09-21.md`: the owner's funded account is on **polymarket.us**, a

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from starlette.datastructures import FormData
 
 from app.db import get_session
-from app.models import Prefs
+from app.models import VENUE_LABELS, VENUE_TAKER_FEE, Prefs
 from app.routes.edges import scan_context
 from app.services import prefs as prefs_service
 from app.templating import templates
@@ -55,6 +55,7 @@ def prefs_to_values(prefs: Prefs) -> dict[str, Any]:
     values["leagues_enabled"] = list(prefs.leagues_enabled or [])
     values["espn_fallback_enabled"] = bool(prefs.espn_fallback_enabled)
     values["pm_wallet"] = prefs.pm_wallet or ""
+    values["venue"] = prefs.venue
     return values
 
 
@@ -71,6 +72,7 @@ def form_to_values(form: FormData) -> dict[str, Any]:
     ]
     values["espn_fallback_enabled"] = "espn_fallback_enabled" in form
     values["pm_wallet"] = str(form.get("pm_wallet", "") or "").strip()
+    values["venue"] = str(form.get("venue", "") or "").strip().lower()
     return values
 
 
@@ -115,7 +117,37 @@ def values_to_update(values: dict[str, Any]) -> dict[str, Any]:
     data["leagues_enabled"] = list(values.get("leagues_enabled") or [])
     data["espn_fallback_enabled"] = "on" if values.get("espn_fallback_enabled") else "off"
     data["pm_wallet"] = values.get("pm_wallet", "") or ""
+    # A form that does not carry the venue field at all leaves the stored one alone. The
+    # select always submits one, so blank here means "not part of this submission" rather
+    # than "clear it", and silently resetting someone's venue would silently reset their
+    # fee with it.
+    venue = values.get("venue", "") or ""
+    if venue:
+        data["venue"] = venue
     return data
+
+
+def _venue_fee_context(values: dict[str, Any]) -> dict[str, Any]:
+    """Whether the stored fee matches what the chosen venue actually charges.
+
+    The two exchanges differ (0.0695 on .us, 0.05 on .com), and a fee left at the other
+    one's number silently overstates every edge. Rather than correct it behind the owner's
+    back on a page they are already editing, say so where they can see it.
+    """
+    venue = values.get("venue") or ""
+    expected = VENUE_TAKER_FEE.get(venue)
+    if expected is None:
+        return {"venue_fee_hint": "", "venue_fee_mismatch": False, "venue_fee_expected": ""}
+    expected_text = _num_text(expected)
+    try:
+        current = float(str(values.get("taker_fee_rate", "")).strip())
+    except (TypeError, ValueError):
+        current = None
+    return {
+        "venue_fee_hint": f"{VENUE_LABELS[venue]}: {expected_text}",
+        "venue_fee_mismatch": current is not None and current != expected,
+        "venue_fee_expected": expected_text,
+    }
 
 
 def settings_context(
@@ -134,7 +166,9 @@ def settings_context(
         "error": error,
         "devig_methods": DEVIG_METHODS,
         "leagues": LEAGUES,
+        "venue_labels": VENUE_LABELS,
     }
+    context.update(_venue_fee_context(values))
     context.update(scan_context(request, session, prefs))
     return context
 
