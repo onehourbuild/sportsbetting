@@ -275,6 +275,18 @@ It refuses to run once you have logged a real bet, so it cannot eat your ledger.
 
 ## Troubleshooting
 
+**Start here: ask the machine what is wrong.** One line, read-only, changes nothing:
+
+```powershell
+irm https://raw.githubusercontent.com/onehourbuild/sportsbetting/claude/trusting-ramanujan-ht0xeg/scripts/status-windows.ps1 | iex
+```
+
+It walks the same pieces the installer builds, in the same order, and names the first one
+that is wrong. If the app will not start it runs it in the foreground for a few seconds
+and prints the real error instead of leaving it buried in Task Scheduler. It also prints
+your URL and password, which is what most people are actually looking for.
+
+
 **`running scripts is disabled on this system`.** The execution policy blocked the file.
 Use the one-line `irm ... | iex` command at the top, which runs from memory instead, or
 start the installer through `powershell -NoProfile -ExecutionPolicy Bypass -File "..."`.
