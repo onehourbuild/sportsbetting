@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import logging
+import sqlite3
 from collections.abc import Generator
 from pathlib import Path
 
 from sqlalchemy import MetaData, create_engine, event
 from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+
+log = logging.getLogger(__name__)
 
 NAMING_CONVENTION = {
     "ix": "ix_%(column_0_label)s",
@@ -41,6 +45,35 @@ def create_db_engine(url: str) -> Engine:
     if is_sqlite:
         connect_args["check_same_thread"] = False
     engine = create_engine(url, connect_args=connect_args, future=True)
+    if is_sqlite:
+
+        @event.listens_for(engine, "connect")
+        def _sqlite_pragmas(dbapi_connection, _record):  # noqa: ANN001
+            """WAL + a real busy timeout, because two processes now write this file.
+
+            The forward test runs `python -m app.cli scan` from a scheduled task while the
+            web app is serving the same database. In SQLite's default rollback journal a
+            writer blocks readers outright, so a page load during a scan fails with
+            "database is locked"; WAL lets readers carry on against the last committed
+            state. The 30s timeout covers the scan's write bursts -- the Python default is
+            5s, which a 3,600-market scan can exceed.
+            """
+            cursor = dbapi_connection.cursor()
+            try:
+                # busy_timeout FIRST: switching to WAL needs a brief exclusive lock, and
+                # with the default 5s timeout it fails outright while a scan is mid-write
+                # (observed). Setting the timeout first makes the switch wait instead.
+                cursor.execute("PRAGMA busy_timeout=30000")
+                cursor.execute("PRAGMA synchronous=NORMAL")
+                try:
+                    cursor.execute("PRAGMA journal_mode=WAL")
+                except sqlite3.OperationalError:
+                    # Another process holds the file and the mode cannot be changed right
+                    # now. The old journal mode still works, so never fail startup over it.
+                    log.warning("could not switch SQLite to WAL (database busy); continuing")
+            finally:
+                cursor.close()
+
     db_file = sqlite_file_path(url) if is_sqlite else None
     if db_file is not None:
 

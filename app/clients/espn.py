@@ -49,6 +49,46 @@ _DETAILS_RE = re.compile(
 )
 
 
+# ESPN's current odds payload nests every price under a market block:
+#   odds[0].moneyline.{home,away}.{open,close}.odds        -> "+123" / "-149"
+#   odds[0].pointSpread.{home,away}.{open,close}.{line,odds} -> "+1.5" / "-136"
+#   odds[0].total.{over,under}.{open,close}.{line,odds}    -> "o8.5" / "-115"
+# All values are STRINGS. `close` is the latest quote; `open` is the fallback.
+_ODDS_PHASES = ("close", "open")
+
+# "o8.5" / "u8.5" (totals) and "+1.5" / "-1.5" / "PK" (spreads).
+_LINE_RE = re.compile(r"^\s*[ou]?\s*(?P<line>[+-]?\d+(?:\.\d+)?)\s*$", re.IGNORECASE)
+
+
+def _odds_phase(block: Any, side: str) -> dict | None:
+    """``block[side]["close"]`` when it carries a price, else ``["open"]``, else None."""
+    if not isinstance(block, dict):
+        return None
+    entry = block.get(side)
+    if not isinstance(entry, dict):
+        return None
+    for phase in _ODDS_PHASES:
+        value = entry.get(phase)
+        if isinstance(value, dict) and value.get("odds") is not None:
+            return value
+    return None
+
+
+def _line_value(value: Any) -> float | None:
+    """Signed number out of a line string: "+1.5" -> 1.5, "o8.5" -> 8.5, "PK" -> 0.0."""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int | float):
+        return float(value)
+    text = str(value).strip()
+    if text.upper() in {"EVEN", "EV", "PK", "PICK"}:
+        return 0.0
+    match = _LINE_RE.match(text)
+    return float(match.group("line")) if match else None
+
+
 @dataclass(frozen=True)
 class EspnOddsGame(EspnGame):
     """`EspnGame` plus the per-side prices ESPN's odds block carries.
@@ -62,6 +102,11 @@ class EspnOddsGame(EspnGame):
     away_spread_odds: int | None = None
     over_odds: int | None = None
     under_odds: int | None = None
+    # Signed per-side points from the `pointSpread` / `total` blocks (see `_odds_phase`).
+    # Explicit per-side lines, so a spread needs neither `details` parsing nor a team token.
+    home_spread_point: float | None = None
+    away_spread_point: float | None = None
+    total_line: float | None = None
 
 
 def _default_team_resolver(name: str, league: League) -> str | None:
@@ -71,8 +116,15 @@ def _default_team_resolver(name: str, league: League) -> str | None:
     return team_key(name, league)
 
 
+# No NFL/NBA/MLB point spread reaches 60. ESPN's `details` is the spread for football and
+# basketball but the MONEYLINE for baseball ("CHC -149"), and a -149 "spread" would price a
+# market against a line nobody offers. Bound it so that payload can never become a market.
+MAX_SPREAD_POINTS = 60.0
+
+
 def parse_spread_details(details: str | None) -> tuple[str, float] | None:
-    """``"KC -3.5"`` -> ``("KC", -3.5)``; None for pick'ems, blanks and anything else."""
+    """``"KC -3.5"`` -> ``("KC", -3.5)``; None for pick'ems, blanks, out-of-range lines
+    (see `MAX_SPREAD_POINTS`) and anything else."""
     if not isinstance(details, str):
         return None
     match = _DETAILS_RE.match(details)
@@ -81,6 +133,9 @@ def parse_spread_details(details: str | None) -> tuple[str, float] | None:
     try:
         line = float(match.group("line"))
     except ValueError:
+        return None
+    if abs(line) > MAX_SPREAD_POINTS:
+        log.debug("ESPN: ignoring %r as a spread (|line| > %s)", details, MAX_SPREAD_POINTS)
         return None
     return match.group("team").strip(), line
 
@@ -232,6 +287,9 @@ class EspnClient:
         away_spread_odds: int | None = None
         over_odds: int | None = None
         under_odds: int | None = None
+        home_spread_point: float | None = None
+        away_spread_point: float | None = None
+        total_line: float | None = None
         odds = _first_dict(competition.get("odds"))
         if odds is not None:
             provider_obj = odds.get("provider")
@@ -255,6 +313,42 @@ class EspnClient:
             over_odds = to_american(odds.get("overOdds"))
             under_odds = to_american(odds.get("underOdds"))
 
+            # Current payload shape (verified live 2026-09-18): the legacy flat fields above
+            # are absent and every price lives in a nested market block. Each value below is
+            # only filled in when the legacy read left it None, so an older payload still
+            # wins on its own terms.
+            ml_block = odds.get("moneyline")
+            home_phase = _odds_phase(ml_block, "home")
+            away_phase = _odds_phase(ml_block, "away")
+            if home_ml is None and home_phase is not None:
+                home_ml = to_american(home_phase.get("odds"))
+            if away_ml is None and away_phase is not None:
+                away_ml = to_american(away_phase.get("odds"))
+
+            spread_block = odds.get("pointSpread")
+            home_phase = _odds_phase(spread_block, "home")
+            away_phase = _odds_phase(spread_block, "away")
+            if home_phase is not None:
+                if home_spread_odds is None:
+                    home_spread_odds = to_american(home_phase.get("odds"))
+                home_spread_point = _line_value(home_phase.get("line"))
+            if away_phase is not None:
+                if away_spread_odds is None:
+                    away_spread_odds = to_american(away_phase.get("odds"))
+                away_spread_point = _line_value(away_phase.get("line"))
+
+            total_block = odds.get("total")
+            over_phase = _odds_phase(total_block, "over")
+            under_phase = _odds_phase(total_block, "under")
+            if over_phase is not None:
+                if over_odds is None:
+                    over_odds = to_american(over_phase.get("odds"))
+                total_line = _line_value(over_phase.get("line"))
+            if under_phase is not None and under_odds is None:
+                under_odds = to_american(under_phase.get("odds"))
+            if total_line is None and under_phase is not None:
+                total_line = _line_value(under_phase.get("line"))
+
         return EspnOddsGame(
             espn_id=espn_id,
             league=league,
@@ -275,6 +369,9 @@ class EspnClient:
             away_spread_odds=away_spread_odds,
             over_odds=over_odds,
             under_odds=under_odds,
+            home_spread_point=home_spread_point,
+            away_spread_point=away_spread_point,
+            total_line=total_line,
         )
 
     def _competitor(self, raw: dict, league: League) -> tuple[str, str, int | None]:
@@ -344,8 +441,27 @@ def _espn_markets(game: EspnGame) -> list[BookMarket]:
             )
         )
 
-    parsed = parse_spread_details(game.spread_details)
     spread_prices = _side_prices(game, "home_spread_odds", "away_spread_odds")
+    home_point = getattr(game, "home_spread_point", None)
+    away_point = getattr(game, "away_spread_point", None)
+    if home_point is not None and away_point is not None and spread_prices is not None:
+        # The `pointSpread` block states each side's own signed line, so there is no team
+        # token to place and no `details` string to parse (for MLB `details` carries the
+        # moneyline — "CHC -149" — which as a spread would be nonsense).
+        home_price, away_price = spread_prices
+        markets.append(
+            BookMarket(
+                key="spreads",
+                outcomes=(
+                    BookOutcome(game.home_name, home_key, home_price, home_point),
+                    BookOutcome(game.away_name, away_key, away_price, away_point),
+                ),
+                last_update=None,
+            )
+        )
+        parsed = None
+    else:
+        parsed = parse_spread_details(game.spread_details)
     if parsed is not None and spread_prices is None:
         log.debug(
             "ESPN %s: spread %r has no per-side spreadOdds; contributing no spreads market",
@@ -379,20 +495,23 @@ def _espn_markets(game: EspnGame) -> list[BookMarket]:
             )
 
     total_prices = _side_prices(game, "over_odds", "under_odds")
-    if game.over_under is not None and total_prices is None:
+    total_point = getattr(game, "total_line", None)
+    if total_point is None:
+        total_point = game.over_under
+    if total_point is not None and total_prices is None:
         log.debug(
             "ESPN %s: total %s has no overOdds/underOdds; contributing no totals market",
             game.league,
-            game.over_under,
+            total_point,
         )
-    elif game.over_under is not None and total_prices is not None:
+    elif total_point is not None and total_prices is not None:
         over_price, under_price = total_prices
         markets.append(
             BookMarket(
                 key="totals",
                 outcomes=(
-                    BookOutcome("Over", None, over_price, game.over_under),
-                    BookOutcome("Under", None, under_price, game.over_under),
+                    BookOutcome("Over", None, over_price, total_point),
+                    BookOutcome("Under", None, under_price, total_point),
                 ),
                 last_update=None,
             )
@@ -407,5 +526,6 @@ __all__ = [
     "ESPN_PATHS",
     "EspnClient",
     "EspnOddsGame",
+    "MAX_SPREAD_POINTS",
     "parse_spread_details",
 ]

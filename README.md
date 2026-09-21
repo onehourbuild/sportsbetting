@@ -100,6 +100,27 @@ you are not using the app, so scheduled scans do not fire. Either set
 `min_machines_running = 1` in `fly.toml` (the machine then costs about $2 a month
 continuously) or leave the scheduler off and run scans on demand from the phone.
 
+## Share it straight from your own PC (no account, no host)
+
+`share.ps1` starts the app on `localhost:8042` and points a Cloudflare **quick tunnel** at
+it, which gives you a public HTTPS URL you can open on your phone or send to someone. No
+Cloudflare account and nothing to pay.
+
+```powershell
+.\share.ps1
+```
+
+Two things to know before you rely on it. The hostname is **random and new on every run**,
+so a link you shared yesterday is dead today — quick tunnels are for trying something out,
+not for a link people keep. And it is up only while that window is open and the PC is on.
+For a URL that survives a reboot you want either a named Cloudflare tunnel (free account +
+a domain on it) or a real host — the Fly.io section above.
+
+Also worth saying plainly: this app is **single-user**. There is one password and one bet
+ledger. Anyone you give the link and password to sees your bankroll and your P&L, and can
+log and settle bets in your ledger. Fine for looking at the edge list together; not a
+shared betting app.
+
 ## Anywhere else (plain Docker, Railway, Render)
 
 The image runs with `APP_ENV=prod` and `DATABASE_URL=sqlite:////data/app.db`, so **the
@@ -124,6 +145,51 @@ the real client address (Fly.io: `fly-client-ip`). It is empty by default, and w
 empty the login throttle counts by socket peer — because any header an attacker can set
 would otherwise give them a fresh identity for every password guess.
 
+## Does it actually win? (forward test and back test)
+
+The app's own success metric is P&L and closing-line value on logged bets. Two commands
+build the evidence for that, because an empty ledger proves nothing either way.
+
+**Forward test — from now on.** Every scan records *every* outcome it can price, whatever
+the edge, into `forward_samples`: the ask, the fee actually charged, the fee-inclusive
+price, the book fair value, the depth at the best ask and the hours to kickoff. Each one
+is graded from Polymarket's own resolution on a later scan. That matters because
+`Opportunity` rows only exist above your minimum edge, so they can never tell you whether
+that minimum was the right one — and with ESPN as the only book almost nothing clears it.
+
+```sh
+python -m app.cli forward-report              # every threshold, side by side
+python -m app.cli forward-report --league mlb --threshold 1 --threshold 2.5
+```
+
+It needs scans to keep running. `forward-scan.cmd` runs one and appends to
+`data/forward-scan.log`; on Windows the scheduled task **"EdgeFinder forward scan"** runs
+it hourly (`schtasks /delete /tn "EdgeFinder forward scan" /f` removes it). Polymarket and
+ESPN are free, so this spends no Odds API credits.
+
+**Back test — Polymarket's past.** `backtest-harvest` walks resolved sports markets and
+rebuilds each one's last *pre-kickoff* traded price, then `backtest-report` shows what the
+market charged against what actually happened.
+
+```sh
+python -m app.cli backtest-harvest --league mlb --league nfl   # slow; resumable
+python -m app.cli backtest-report --league mlb
+```
+
+Read the limits before you read the numbers:
+
+- It does **not** test this app's strategy. That needs historical sportsbook lines, which
+  are paid data (The Odds API keeps them back to June 2020; ESPN drops odds from finished
+  games). What it tests is whether Polymarket's own price is calibrated — if 60c favourites
+  win 60% of the time there is no free money in the price, and if a band wins more often
+  than it costs, that is an edge needing no book at all.
+- **There is no five-year history.** Polymarket's per-game sports markets start Oct 2023
+  (NFL), Dec 2023 (NBA) and Aug 2024 (MLB).
+- Trades after kickoff are discarded and a "close" more than 12 hours stale is excluded by
+  default. Both are the easy ways to make a back test look profitable when it is not.
+- Tuning a threshold until the past looks good is how you build something that loses money
+  in future. Prefer closing-line value over profit, and keep a season you never tuned on.
+
 ## Routes
 
 | Route | What it is |
@@ -132,6 +198,7 @@ would otherwise give them a fresh identity for every password guess.
 | `/games/{id}` | One game: every market, per-book table, ask depth, resting limit price |
 | `/bets` | Ledger and summary; `/bets/new` is the htmx bet form |
 | `/settings` | Bankroll, Kelly, edge, fee, de-vig, bookmakers and weights, leagues |
+| `/games` | Every game the scans stored, by league; upcoming and started shown separately |
 | `/diagnostics` | Recent scans, errors, unmatched / unparseable markets, conventions, raw rows |
 | `/login`, `/logout` | Password gate (five wrong guesses lock the address out) |
 | `/healthz` | Public JSON health check |

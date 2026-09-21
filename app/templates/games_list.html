@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Games · {{ app_name }}{% endblock %}
+
+{% block content %}
+<h1 class="page-title">Games</h1>
+
+<div class="chips" role="group" aria-label="League">
+  {% for chip in ['all', 'nfl', 'nba', 'mlb'] %}
+  <a class="chip{% if league == chip %} active{% endif %}"
+     href="/games?league={{ chip }}"
+     {% if league == chip %}aria-current="page"{% endif %}>{{ 'All' if chip == 'all' else chip|upper }}</a>
+  {% endfor %}
+</div>
+
+{% if scan is none %}
+<section class="card empty">
+  <h2>No scans yet</h2>
+  <p>Run a refresh from <a href="/">Edges</a> and the games will show up here.</p>
+</section>
+{% elif not upcoming and not finished %}
+<section class="card empty">
+  <p>No {% if league != 'all' %}{{ league|upper }} {% endif %}games stored yet.</p>
+  <p class="muted small">The last scan was {{ scan.started_at|ago(now) }}. Out-of-season leagues
+    carry only futures markets, which this app does not price.</p>
+</section>
+{% else %}
+
+{% if upcoming %}
+<p class="muted small list-meta">{{ upcoming|length }} upcoming &middot; scan {{ scan.started_at|ago(now) }}</p>
+<ul class="game-list">
+  {% for game in upcoming %}
+  <li class="card game-row">
+    <a href="/games/{{ game.id }}">
+      <span class="game-row-teams">{{ game.away_name or game.away_key or '?' }}
+        <span class="muted">&#64;</span> {{ game.home_name or game.home_key or '?' }}</span>
+      <span class="game-row-meta muted small">
+        {{ game.league|upper }}
+        {%- if game.start_time %} &middot; <time datetime="{{ game.start_time.isoformat() }}">{{ game.start_time|ago(now) }}</time>{% endif %}
+        {%- set n = market_counts.get(game.id, 0) %}
+        {%- if n %} &middot; {{ n }} market{{ '' if n == 1 else 's' }}{% endif %}
+        {%- if not game.book_game_id %} &middot; <span class="warn">no book line</span>{% endif %}
+      </span>
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+{% if finished %}
+<h2 class="section-head">Started or finished</h2>
+<p class="muted small">Showing {{ finished|length }} of {{ n_finished }}. These are no longer
+  priceable: Polymarket reflects the live score while the stored book line is pre-game.</p>
+<ul class="game-list">
+  {% for game in finished %}
+  <li class="card game-row muted">
+    <a href="/games/{{ game.id }}">
+      <span class="game-row-teams">{{ game.away_name or game.away_key or '?' }}
+        <span class="muted">&#64;</span> {{ game.home_name or game.home_key or '?' }}</span>
+      <span class="game-row-meta muted small">
+        {{ game.league|upper }}
+        {%- if game.start_time %} &middot; {{ game.start_time|ago(now) }}{% endif %}
+      </span>
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+{% endif %}
+{% endblock %}

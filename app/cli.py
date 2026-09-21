@@ -1,4 +1,4 @@
-"""`python -m app.cli scan|settle|demo-seed`."""
+"""`python -m app.cli scan|settle|demo-seed|demo-clear|forward-report`."""
 
 from __future__ import annotations
 
@@ -94,6 +94,80 @@ def cmd_demo_clear(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_forward_report(args: argparse.Namespace) -> int:
+    from app.services import forward
+
+    thresholds = (
+        tuple(sorted({float(t) / 100.0 for t in args.threshold}))
+        if args.threshold
+        else forward.DEFAULT_THRESHOLDS
+    )
+    with _session() as session:
+        data = forward.report(session, thresholds=thresholds, league=args.league)
+    print(forward.format_report(data))
+    return 0
+
+
+def cmd_backtest_harvest(args: argparse.Namespace) -> int:
+    from datetime import UTC, datetime, timedelta
+
+    from app.clients.transport import HttpTransport
+    from app.services import backtest
+
+    transport = HttpTransport()
+
+    def get_json(url: str, params: dict) -> object:
+        payload, _headers = transport.get_json(url, params)
+        return payload
+
+    since = datetime.now(UTC) - timedelta(days=args.days) if args.days else None
+    leagues = args.league or list(backtest.LEAGUES)
+    print(
+        f"harvesting {', '.join(leagues)} "
+        f"({'all history' if since is None else f'last {args.days} days'})...",
+        flush=True,
+    )
+
+    def progress(stats: backtest.HarvestStats) -> None:
+        print(f"  ... {stats.stored} stored, {stats.resolved} resolved markets seen", flush=True)
+
+    with _session() as session:
+        stats = backtest.harvest(
+            session,
+            get_json,
+            leagues=leagues,
+            max_pages=args.pages,
+            since=since,
+            limit=args.limit,
+            on_progress=progress,
+        )
+        session.commit()
+    transport.close()
+    print(
+        f"harvested: {stats.stored} outcomes stored from {stats.resolved} resolved markets "
+        f"({stats.skipped_existing} already had, {stats.skipped_no_trades} had no usable trades)"
+    )
+    return 0
+
+
+def cmd_backtest_report(args: argparse.Namespace) -> int:
+    from app.services import backtest
+
+    with _session() as session:
+        data = backtest.report(
+            session,
+            league=args.league,
+            market_type=args.market_type,
+            fee_rate=args.fee,
+            paired=args.paired,
+            max_close_age_hours=(
+                backtest.DEFAULT_MAX_CLOSE_AGE_HOURS if args.max_age is None else args.max_age
+            ),
+        )
+    print(backtest.format_report(data))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="app.cli", description="Polymarket Edge Finder CLI")
     parser.add_argument("--log-level", default=None, help="override LOG_LEVEL")
@@ -115,6 +189,49 @@ def build_parser() -> argparse.ArgumentParser:
         help="delete the synthetic demo bets and slate (refuses when real bets exist)",
     )
     clear.set_defaults(func=cmd_demo_clear)
+
+    fwd = sub.add_parser(
+        "forward-report",
+        help="what each edge threshold would have returned on the recorded samples",
+    )
+    fwd.add_argument("--league", choices=("nfl", "nba", "mlb"), default=None)
+    fwd.add_argument(
+        "--threshold",
+        action="append",
+        type=float,
+        metavar="PCT",
+        help="edge threshold in percent (repeatable); default 0, 0.5, 1, 2, 3, 5",
+    )
+    fwd.set_defaults(func=cmd_forward_report)
+
+    harvest = sub.add_parser(
+        "backtest-harvest",
+        help="pull Polymarket's resolved sports markets and their pre-kickoff prices",
+    )
+    harvest.add_argument("--league", action="append", choices=("nfl", "nba", "mlb"))
+    harvest.add_argument("--days", type=int, default=None, help="only games this recent")
+    harvest.add_argument("--pages", type=int, default=60, help="Gamma pages per league")
+    harvest.add_argument("--limit", type=int, default=None, help="stop after N outcomes")
+    harvest.set_defaults(func=cmd_backtest_harvest)
+
+    back = sub.add_parser(
+        "backtest-report", help="calibration and return by price band over harvested history"
+    )
+    back.add_argument("--league", choices=("nfl", "nba", "mlb"), default=None)
+    back.add_argument("--market-type", choices=("moneyline", "spreads", "totals"), default=None)
+    back.add_argument("--fee", type=float, default=0.05, help="taker fee coefficient")
+    back.add_argument(
+        "--max-age",
+        type=float,
+        default=None,
+        help="max hours between the closing trade and kickoff (default 12)",
+    )
+    back.add_argument(
+        "--paired",
+        action="store_true",
+        help="only markets whose two sides form one simultaneous quote (recommended)",
+    )
+    back.set_defaults(func=cmd_backtest_report)
     return parser
 
 

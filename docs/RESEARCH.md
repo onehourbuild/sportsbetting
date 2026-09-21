@@ -193,3 +193,44 @@ Base: `https://api.the-odds-api.com/v4`
     total is contributed only when both sides carry a real price; assuming -110/-110
     de-vigged to exactly 0.5 whatever the real price was and turned any side asking
     below ~0.475 into a fabricated opportunity. Moneylines are unaffected.
+
+## Verified live 2026-09-18 (first run against the real APIs)
+
+The list above was written from source code and docs. These are observations from real
+responses, and they supersede the matching "Unverified" entries.
+
+- **Gamma `/events?tag_slug=` works as described**: events nest `markets[]` with the listed
+  fields (item 2), `outcomes` / `outcomePrices` / `clobTokenIds` arrive as JSON-encoded
+  strings, and the optional `order` / `sports_market_types` filters were accepted — no
+  fallback was triggered (item 13). NFL returned 3,281 parseable markets and MLB 332.
+- **`sportsMarketType` (item 1, item 10).** Confirmed `moneyline`, `spreads`, `totals`. The
+  live slate also carries many types the app deliberately ignores — `first_half_spreads`,
+  `second_half_spreads`, `q1_spreads`, `team_totals`, `first_touchdowns`,
+  `receiving_yards`, `baseball_player_hits`, `baseball_player_total_bases` and more — plus
+  a large tail with `sportsMarketType: null` (season futures, award and novelty markets).
+  These land on Diagnostics as "unsupported market type", which is **expected**, not a
+  parser failure: a normal NFL scan lists ~15k of them.
+- **`takerBaseFee` (item 7) is `1000` on sports markets.** Read as basis points that is
+  0.10, inside the plausible band, so it is accepted and applied — while Polymarket's fee
+  docs state a 0.05 coefficient for sports. The unit remains unverified and the two
+  disagree. Left as-is deliberately: too high a fee understates edge, which can only hide
+  an opportunity, never invent one. Every override is on Diagnostics.
+- **ESPN requires a recognised HTTP-client User-Agent** (new, item 20 below).
+- **ESPN's odds block moved** (new, item 21 below) — items 12 and 19 are superseded.
+- **NBA out of season** (mid-September): 509 events, every one a future or novelty market,
+  so zero game markets. Correct behaviour, but worth knowing before calling it a bug.
+
+20. `site.api.espn.com` returns `403 Access Denied` for a custom User-Agent and serves
+    requests naming a known client (`curl/…`, `python-httpx/…`, `python-requests/…`,
+    `okhttp/…`, `Go-http-client/…`). A browser UA is also refused. `USER_AGENT` therefore
+    leads with the httpx token. If ESPN data ever disappears again, test the User-Agent
+    first — the failure is a clean 403 on every call, visible on Diagnostics as an error.
+21. ESPN's scoreboard odds are now `odds[0].{moneyline, pointSpread, total}`, each with
+    `{home, away}` or `{over, under}`, each of those with `{open, close}` holding string
+    `odds` and (for spreads/totals) a string `line` — `"+123"`, `"+1.5"`, `"o8.5"`. The
+    flat `homeTeamOdds.moneyLine`, `homeTeamOdds.spreadOdds`, `overOdds` and `underOdds`
+    fields are absent. Both shapes are read; `close` wins over `open`, legacy wins over
+    nested. `details` is the spread for NFL/NBA but the **moneyline** for MLB, so it is no
+    longer used when `pointSpread` is present and is bounded by `MAX_SPREAD_POINTS`.
+22. Still unverified: settlement from `outcomePrices` after a real resolution, CLV capture
+    from a real closing snapshot, and every Odds API code path (no key was available).

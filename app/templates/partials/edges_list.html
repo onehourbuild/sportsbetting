@@ -18,9 +18,11 @@
   <section class="card empty">
     <p>No edges &ge; {{ prefs.min_edge|pct }}{% if league != 'all' %} in {{ league|upper }}{% endif %} in the scan from {{ scan.started_at|ago(now) }}.</p>
     <p class="muted small">{{ scan.n_matched }} of {{ scan.n_markets }} markets matched a book game. Refresh to re-price, or lower the minimum edge in Settings.</p>
+    <p><a href="/games{% if league != 'all' %}?league={{ league }}{% endif %}">Browse all games &rarr;</a></p>
   </section>
   {% else %}
   <p class="muted small list-meta">{{ rows|length }} edge{{ '' if rows|length == 1 else 's' }} &ge; {{ prefs.min_edge|pct }} · scan {{ scan.started_at|ago(now) }}</p>
+  <p class="muted small"><a href="/games{% if league != 'all' %}?league={{ league }}{% endif %}">Browse all games &rarr;</a></p>
   {% for row in rows %}{{ m.opp_card(row) }}{% endfor %}
   {% endif %}
 </div>

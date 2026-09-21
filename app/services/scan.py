@@ -67,6 +67,7 @@ from app.models import (
     Scan,
 )
 from app.services import bets as bets_service
+from app.services import forward
 from app.services.adapters import RESOLVED_LETTER, stored_book_game
 from app.services.prefs import get_prefs
 from app.settings import Settings, get_settings
@@ -573,6 +574,22 @@ def _scan_league(
                 raise RuntimeError(
                     f"order book keyed by {book.token_id} used for {outcome.token_id}"
                 )
+            # Forward test: record what we saw whatever the edge, so the threshold question
+            # can be asked later from data instead of being fixed now. Never let it break a
+            # scan -- it is observation, not part of the pricing path.
+            try:
+                forward.record_sample(
+                    session,
+                    scan_id=scan.id,
+                    market=market,
+                    outcome_index=index,
+                    book=book,
+                    fair=fair,
+                    prefs_fee_rate=float(_pref(prefs, "taker_fee_rate")),
+                    now=now,
+                )
+            except Exception as exc:  # noqa: BLE001
+                state.error(league, f"forward sample for {market.market_id}", exc)
             try:
                 opp = build_opportunity(market, index, book, fair, prefs, book_game, now)
             except ValueError as exc:
@@ -620,6 +637,34 @@ def _markets_for_open_bets(session: Session, polymarket: PolymarketClient, state
             continue
         state.markets_by_id[market_id] = market
         upsert_market(session, market, game, state.now)
+
+
+def _markets_for_pending_samples(
+    session: Session, polymarket: PolymarketClient, state: _State
+) -> list[str]:
+    """Same idea as `_markets_for_open_bets`, for the forward test: a resolved market has
+    left the active slate, so its result has to be fetched by id before samples can be
+    graded. Capped by `forward.MAX_SETTLE_PER_SCAN` so a long backlog costs a bounded
+    number of requests per scan and catches up over several runs."""
+    wanted = forward.pending_market_ids(session, state.now)
+    fetched: list[str] = []
+    for market_id in wanted:
+        fetched.append(market_id)
+        if market_id in state.markets_by_id:
+            continue
+        row = session.get(Market, market_id)
+        game = session.get(Game, row.game_id) if row is not None and row.game_id else None
+        league = game.league if game is not None else None
+        try:
+            market = polymarket.market(market_id, league=league)  # type: ignore[arg-type]
+        except Exception as exc:  # noqa: BLE001 - one market never aborts the scan
+            state.error("forward", f"market {market_id}", exc)
+            continue
+        if market is None:
+            continue
+        state.markets_by_id[market_id] = market
+        upsert_market(session, market, game, state.now)
+    return fetched
 
 
 # --------------------------------------------------------------------------- entry points
@@ -671,6 +716,14 @@ def run_scan(
         # snapshots only, so the order never changes the values it records).
         n_closing = bets_service.capture_closing(session, scan.id, now)
         n_settled = bets_service.settle_open_bets(session, state.markets_by_id, now)
+        # Forward test: grade whatever has resolved since the last scan.
+        try:
+            sampled_ids = _markets_for_pending_samples(session, polymarket, state)
+            forward.settle(session, state.markets_by_id, now)
+            forward.capture_closing(session, sampled_ids)
+        except Exception as exc:  # noqa: BLE001 - observation must not fail a scan
+            log.exception("forward-test settlement failed")
+            state.error("forward", "settle", exc)
     except Exception as exc:
         session.rollback()
         scan = session.merge(scan)

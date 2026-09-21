@@ -1,6 +1,62 @@
 # CHANGELOG
 
 ## Unreleased — v1 build (2026-09-18)
+
+### First live read (2026-09-20)
+- `docs/STATUS-2026-09-20.md`: the app is deployed (two installs on the owner's PC), the
+  client parsers matched live payloads, "market closed" on Diagnostics was verified against
+  Gamma as real resolutions, and the phone install's 0 matched is explained by a book
+  refresh that has never run. Includes the forward-test table so far and Kalshi public API
+  field names for the future client.
+- `docs/OWNER-GUIDE.md`: how to log a bet, a worked Monday-night example (no bet: all
+  three venues agree to the cent), how the app improves (evidence and settings, not
+  learning), and where funds live (the exchanges, never the app).
+
+### Measuring whether it wins (2026-09-18)
+- **Forward test** (`forward_samples`, `app/services/forward.py`). Every outcome a scan can
+  price is now recorded whatever its edge - not just those above `min_edge`, which is all
+  `Opportunity` ever stored and which on an ESPN-only slate is nothing at all. Samples carry
+  the ask, the fee actually charged, the fee-inclusive price, the book fair value, the depth
+  at the best ask and the hours to kickoff; they are graded from Polymarket's own resolution
+  on a later scan. `python -m app.cli forward-report` buckets the graded rows by edge
+  threshold, so the threshold is chosen from data afterwards instead of guessed up front.
+- **`/games` list page.** The app had no way to reach a game when there were no edges - the
+  home page IS the edge list - so a correctly-working app looked broken and empty. League
+  chips, market counts, a "no book line" marker, upcoming and started shown separately.
+- **Back test** (`historical_samples`, `app/services/backtest.py`).
+  `backtest-harvest` walks Polymarket's resolved sports markets and rebuilds each one's last
+  pre-kickoff traded price from `data-api/trades` (CLOB `/prices-history` is empty for
+  resolved markets and ESPN drops odds from finished games, so both obvious sources have no
+  history). `backtest-report` prints calibration and return by price band: what the market
+  charged, how often that outcome actually won, and the return net of the taker fee.
+  In-play trades are dropped and a close staler than 12h is excluded by default - the two
+  easiest ways to fake a winning back test. The report also prints a p-value per band, and
+  `--paired` keeps only markets whose two sides form one simultaneous quote: without it the
+  live NFL data showed a single "significant" band (90-99c, p=0.003) that turned out to be
+  built entirely from one-sided closing prices and reversed sign under a tighter filter.
+- 52 new tests (1250 total), plus SQLite WAL + a 30s busy timeout: the scheduled scan and
+  the web app now write the same file, and in the default journal mode a scan mid-write made
+  page loads fail with "database is locked" (observed while harvesting).
+
+### Live-API fixes (2026-09-18, first run against the real APIs)
+- **ESPN 403 on every request.** `site.api.espn.com` allowlists recognised HTTP-client
+  User-Agents; `polymarket-edge-finder/0.1` was refused, `curl`/`python-httpx`/
+  `python-requests`/`okhttp`/`Go-http-client` were served. `transport.USER_AGENT` now leads
+  with the real httpx token and keeps the app name after it.
+- **ESPN odds payload re-shaped.** The flat `homeTeamOdds.moneyLine` / `spreadOdds` /
+  `overOdds` / `underOdds` fields are gone; prices now live in nested `moneyline`,
+  `pointSpread` and `total` blocks with `{open, close}` phases and string values. The old
+  parser read nothing from them, so `to_book_games` returned nothing and a full live slate
+  scanned to `matched=0, opps=0` silently. `_parse_event` reads the nested shape (preferring
+  `close`), keeping the legacy fields as the winner where a payload still has them.
+- **Spreads come from `pointSpread`'s per-side signed lines**, not from parsing `details` and
+  placing a team token. For baseball `details` is the moneyline (`"CHC -149"`), which as a
+  spread would price against a −149-run line: `parse_spread_details` now also rejects any
+  |line| > `MAX_SPREAD_POINTS` (60).
+- Six regression tests covering the nested payload, the `open` fallback, the MLB `details`
+  trap, an empty block contributing nothing, and the User-Agent contract. Suite 1198 green.
+- Net effect on a live MLB slate: `matched` 0 → 206, book quotes 0 → 146, and the edge math
+  runs (best observed edge +0.17% against a 2% threshold, i.e. correctly reporting no bet).
 - Adjusted build prompt, spec, research notes, architecture contract.
 - Scaffold: pyproject/requirements/Makefile/Dockerfile/fly.toml/CI, Settings, db, models
   (all 8 tables), core types, transport (Http + Fixture), prefs service, templating

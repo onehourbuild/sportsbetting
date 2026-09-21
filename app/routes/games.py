@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
@@ -23,6 +23,7 @@ from app.routes.edges import (
     iso_utc,
     latest_ok_scan,
     market_label,
+    normalize_league,
     polymarket_url,
     side_label,
 )
@@ -297,6 +298,51 @@ def build_market_views(session: Session, game: Game, now: datetime) -> list[Mark
 
 
 # --------------------------------------------------------------------------- routes
+
+
+@router.get("/games", response_class=HTMLResponse)
+async def games_list(
+    request: Request,
+    league: str = "all",
+    session: Session = Depends(get_session),
+    now: datetime = Depends(get_now),
+) -> HTMLResponse:
+    """Every game the last scans stored, upcoming first.
+
+    Without this page the app is unreachable whenever there is no edge to show: the home
+    page IS the edge list, and with one low-weight book almost nothing clears the minimum
+    edge, so a working app looked empty and there was no way in to the games it had pulled.
+    """
+    league = normalize_league(league)
+    query = select(Game)
+    if league != "all":
+        query = query.where(Game.league == league)
+
+    upcoming, finished = [], []
+    for game in session.scalars(query.order_by(Game.start_time)):
+        start = game.start_time
+        if start is not None and start.tzinfo is None:
+            start = start.replace(tzinfo=UTC)
+        (finished if (start is not None and start <= now) else upcoming).append(game)
+    finished.reverse()  # most recently started first
+
+    counts = dict(
+        session.execute(
+            select(Market.game_id, func.count())
+            .where(Market.game_id.is_not(None))
+            .group_by(Market.game_id)
+        ).all()
+    )
+    context = {
+        "league": league,
+        "upcoming": upcoming,
+        "finished": finished[:40],
+        "n_finished": len(finished),
+        "market_counts": counts,
+        "scan": latest_ok_scan(session),
+        "now": now,
+    }
+    return templates.TemplateResponse(request, "games_list.html", context)
 
 
 @router.get("/games/{game_id}", response_class=HTMLResponse)

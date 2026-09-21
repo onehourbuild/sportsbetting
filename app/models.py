@@ -308,6 +308,129 @@ class Bet(Base):
         )
 
 
+class ForwardSample(Base):
+    """One priced outcome at one moment, recorded **whatever its edge**, then graded.
+
+    This is the forward test. `Opportunity` only ever stores outcomes that already clear
+    `prefs.min_edge`, so a database full of them can answer "did my 2% bets win?" and
+    nothing else — and with ESPN as the only book almost nothing clears 2%, so it answers
+    nothing at all. A sample is written for every outcome the scan could price, so the
+    question "what would a 1% / 2% / 5% threshold have returned?" can be asked later,
+    against the same rows, without having committed to a threshold up front.
+
+    `won` is filled in from Polymarket's own resolution once the market closes; until then
+    it is NULL and the row is "pending". `pnl_per_dollar` is the return on one dollar
+    staked at `effective_price` (fee included): (1 - price) / price on a win, -1 on a loss.
+    """
+
+    __tablename__ = "forward_samples"
+    __table_args__ = (
+        Index("ix_forward_samples_scan_market", "scan_id", "market_id"),
+        # The report scans pending rows by kickoff and grades by edge; both are hot.
+        Index("ix_forward_samples_pending", "won", "game_start"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    scan_id: Mapped[int] = mapped_column(ForeignKey("scans.id"), nullable=False)
+    market_id: Mapped[str] = mapped_column(ForeignKey("markets.id"), nullable=False, index=True)
+    token: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    outcome_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    outcome_name: Mapped[str] = mapped_column(String(80), nullable=False)
+    outcome_key: Mapped[str | None] = mapped_column(String(8))
+
+    league: Mapped[str] = mapped_column(String(8), nullable=False, index=True)
+    market_type: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    line: Mapped[float | None] = mapped_column(Float)
+
+    # What Polymarket asked, and what a taker really pays once the fee is added.
+    ask: Mapped[float] = mapped_column(Float, nullable=False)
+    effective_price: Mapped[float] = mapped_column(Float, nullable=False)
+    fee_rate: Mapped[float] = mapped_column(Float, nullable=False)
+    # Dollars of ask depth at the best level: a "3% edge" on $12 of depth is not a bet.
+    top_ask_usd: Mapped[float | None] = mapped_column(Float)
+    liquidity: Mapped[float | None] = mapped_column(Float)
+
+    # What the books said, de-vigged.
+    fair_prob: Mapped[float] = mapped_column(Float, nullable=False)
+    fair_method: Mapped[str] = mapped_column(String(16), nullable=False, default="power")
+    n_books: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    books_used: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    edge: Mapped[float] = mapped_column(Float, nullable=False, index=True)
+
+    game_start: Mapped[datetime | None] = mapped_column(UtcDateTime)
+    # Hours between the sample and kickoff: lets the report ask whether the edge is real
+    # early and gone late, or the other way round.
+    hours_to_start: Mapped[float | None] = mapped_column(Float)
+    sampled_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False, default=utcnow)
+
+    # Graded from Polymarket's resolution. NULL = still pending.
+    won: Mapped[bool | None] = mapped_column(Boolean)
+    settled_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
+    pnl_per_dollar: Mapped[float | None] = mapped_column(Float)
+    # Polymarket's own last pre-kickoff price for this token, for closing-line value.
+    closing_pm_price: Mapped[float | None] = mapped_column(Float)
+    clv: Mapped[float | None] = mapped_column(Float)
+
+    market: Mapped[Market] = relationship()
+
+    def __repr__(self) -> str:
+        state = "pending" if self.won is None else ("won" if self.won else "lost")
+        return (
+            f"<ForwardSample {self.league}/{self.market_type} {self.outcome_name} "
+            f"ask={self.ask} fair={self.fair_prob:.3f} edge={self.edge:+.4f} {state}>"
+        )
+
+
+class HistoricalSample(Base):
+    """One resolved outcome from Polymarket's past, with the price it last traded at before
+    kickoff. The back test.
+
+    Built from two endpoints that survive resolution, because the obvious ones do not:
+    `GET /prices-history` returns nothing for a closed market (verified on markets up to
+    $400M volume) and ESPN strips odds off finished games, so neither the app's own price
+    source nor its book source has any memory. What does survive is Gamma's resolution
+    (`outcomePrices` becomes ["1","0"] or ["0","1"]) and `data-api/trades`, which still
+    lists every individual trade with a timestamp.
+
+    There is no `fair_prob` here on purpose. Historical sportsbook lines are paid data, so
+    this table cannot answer "was Polymarket mispriced against the books?". It answers the
+    question underneath it — is Polymarket itself well calibrated, and does any price band
+    win more often than it costs — which needs no book at all.
+    """
+
+    __tablename__ = "historical_samples"
+    __table_args__ = (Index("ix_historical_league_start", "league", "game_start"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    market_id: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    condition_id: Mapped[str | None] = mapped_column(String(80))
+    league: Mapped[str] = mapped_column(String(8), nullable=False, index=True)
+    market_type: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    line: Mapped[float | None] = mapped_column(Float)
+    question: Mapped[str] = mapped_column(Text, nullable=False, default="")
+
+    outcome_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    outcome_name: Mapped[str] = mapped_column(String(80), nullable=False, default="")
+
+    game_start: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False)
+    # Last trade STRICTLY before kickoff: Polymarket's own closing price for this outcome.
+    close_price: Mapped[float] = mapped_column(Float, nullable=False)
+    close_trade_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
+    # Hours between that last trade and kickoff. A "closing" price from 30 hours out is a
+    # stale market, not a close, and the report can exclude it.
+    close_age_hours: Mapped[float | None] = mapped_column(Float)
+    n_trades_pre: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    won: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    harvested_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False, default=utcnow)
+
+    def __repr__(self) -> str:
+        return (
+            f"<HistoricalSample {self.league}/{self.market_type} {self.outcome_name} "
+            f"close={self.close_price} won={self.won}>"
+        )
+
+
 class Prefs(Base):
     """Single-row user preferences (see SPEC.md "Preferences")."""
 

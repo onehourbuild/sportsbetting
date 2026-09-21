@@ -375,3 +375,16 @@ body.sheet-open { overflow: hidden; }
   .sheet-panel { animation: none; }
   .spinner { animation: none; }
 }
+
+/* Games list (/games) --------------------------------------------------- */
+.game-list { list-style: none; margin: 0 0 16px; padding: 0; }
+.game-row { padding: 0; margin-bottom: 8px; }
+.game-row > a {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 12px 14px; text-decoration: none; color: inherit;
+}
+.game-row > a:hover, .game-row > a:focus-visible { background: var(--card-hover, rgba(127,127,127,.08)); }
+.game-row-teams { font-weight: 600; }
+.game-row-meta { display: block; }
+.section-head { margin: 22px 0 6px; font-size: 1rem; }
+.warn { color: var(--warn, #e0a300); }

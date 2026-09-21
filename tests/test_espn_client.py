@@ -101,9 +101,10 @@ def make_game(**overrides: Any) -> EspnOddsGame:
 
 def make_bare_game(**overrides: Any) -> EspnGame:
     """A plain `EspnGame` (the contract type): a line and a total but no per-side prices."""
-    fields = {f: v for f, v in vars(make_game(**overrides)).items()}
-    for extra in ("home_spread_odds", "away_spread_odds", "over_odds", "under_odds"):
-        fields.pop(extra, None)
+    # Derive the EspnOddsGame-only fields rather than listing them: a new one added to the
+    # subclass would otherwise leak into EspnGame(**fields) and fail here as a TypeError.
+    extras = set(EspnOddsGame.__dataclass_fields__) - set(EspnGame.__dataclass_fields__)
+    fields = {f: v for f, v in vars(make_game(**overrides)).items() if f not in extras}
     return EspnGame(**fields)
 
 
@@ -634,3 +635,166 @@ def test_unresolved_team_labels_are_recorded_and_logged(caplog: pytest.LogCaptur
     assert any("unresolved team 'Nowhere FC'" in r.getMessage() for r in caplog.records)
     client.scoreboard("nfl")
     assert len(client.unresolved_teams) == 1
+
+
+# ------------------------------------------------- current ("nested block") odds payload
+#
+# Live regression, 2026-09-18: ESPN stopped sending the flat `homeTeamOdds.moneyLine` /
+# `spreadOdds` / `overOdds` fields and moved every price into `moneyline`, `pointSpread`
+# and `total` blocks, each with `{open, close}` phases holding STRING values. The old
+# parser read nothing from that payload, so `to_book_games` returned an empty list, no
+# market matched a book and the app reported zero opportunities on a full live slate.
+
+
+def nested_odds_event(
+    *,
+    espn_id: str = "401800001",
+    home_abbr: str = "TOR",
+    away_abbr: str = "BAL",
+    home_display: str = "Toronto Blue Jays",
+    away_display: str = "Baltimore Orioles",
+    details: str = "BAL -149",
+    moneyline: dict | None = None,
+    point_spread: dict | None = None,
+    total: dict | None = None,
+) -> dict:
+    """One `events[]` entry shaped like ESPN's current scoreboard response."""
+    odds: dict[str, Any] = {
+        "provider": {"id": "100", "name": "DraftKings"},
+        "details": details,
+        "overUnder": 8.5,
+        "spread": 1.5,
+        # Present but priceless, exactly as live: the flat fields the old parser wanted
+        # are simply absent from these objects now.
+        "homeTeamOdds": {"favorite": False, "underdog": True},
+        "awayTeamOdds": {"favorite": True, "underdog": False},
+    }
+    if moneyline is not None:
+        odds["moneyline"] = moneyline
+    if point_spread is not None:
+        odds["pointSpread"] = point_spread
+    if total is not None:
+        odds["total"] = total
+    return {
+        "id": espn_id,
+        "competitions": [
+            {
+                "date": "2026-09-18T22:40Z",
+                "status": {"type": {"completed": False}},
+                "competitors": [
+                    {
+                        "homeAway": "home",
+                        "score": "0",
+                        "team": {"abbreviation": home_abbr, "displayName": home_display},
+                    },
+                    {
+                        "homeAway": "away",
+                        "score": "0",
+                        "team": {"abbreviation": away_abbr, "displayName": away_display},
+                    },
+                ],
+                "odds": [odds],
+            }
+        ],
+    }
+
+
+NESTED_MONEYLINE = {
+    "home": {"open": {"odds": "+108"}, "close": {"odds": "+123"}},
+    "away": {"open": {"odds": "-130"}, "close": {"odds": "-149"}},
+}
+NESTED_SPREAD = {
+    "home": {"open": {"line": "+1.5", "odds": "-149"}, "close": {"line": "+1.5", "odds": "-136"}},
+    "away": {"open": {"line": "-1.5", "odds": "+123"}, "close": {"line": "-1.5", "odds": "+113"}},
+}
+NESTED_TOTAL = {
+    "over": {"open": {"line": "o9", "odds": "+100"}, "close": {"line": "o8.5", "odds": "-115"}},
+    "under": {"open": {"line": "u9", "odds": "-120"}, "close": {"line": "u8.5", "odds": "-105"}},
+}
+
+
+def nested_client(event: dict, league: str = "mlb") -> EspnClient:
+    path = {"mlb": "baseball/mlb", "nfl": "football/nfl", "nba": "basketball/nba"}[league]
+    transport = FixtureTransport(
+        FIXTURES_DIR,
+        [("GET", f"{BASE}/{path}/scoreboard", lambda url, params, body: ({"events": [event]}, {}))],
+    )
+    return EspnClient(transport, base=BASE, team_resolver=dict_resolver)
+
+
+def test_nested_blocks_supply_every_price_and_line() -> None:
+    client = nested_client(
+        nested_odds_event(
+            moneyline=NESTED_MONEYLINE, point_spread=NESTED_SPREAD, total=NESTED_TOTAL
+        )
+    )
+    (game,) = client.scoreboard("mlb", date(2026, 9, 18))
+    # `close` is the latest quote, so it wins over `open`.
+    assert (game.home_moneyline, game.away_moneyline) == (123, -149)
+    assert (game.home_spread_odds, game.away_spread_odds) == (-136, 113)
+    assert (game.home_spread_point, game.away_spread_point) == (1.5, -1.5)
+    assert (game.over_odds, game.under_odds) == (-115, -105)
+    assert game.total_line == 8.5  # "o8.5" -> 8.5
+
+
+def test_nested_blocks_become_all_three_book_markets() -> None:
+    client = nested_client(
+        nested_odds_event(
+            moneyline=NESTED_MONEYLINE, point_spread=NESTED_SPREAD, total=NESTED_TOTAL
+        )
+    )
+    (book_game,) = EspnClient.to_book_games(client.scoreboard("mlb", date(2026, 9, 18)))
+    assert {m.key for m in book_game.books[0].markets} == {"h2h", "spreads", "totals"}
+
+    h2h = market(book_game, "h2h")
+    assert [(o.team_key, o.price_american) for o in h2h.outcomes] == [("TOR", 123), ("BAL", -149)]
+
+    # The spread comes from each side's own signed line, not from `details`.
+    spreads = market(book_game, "spreads")
+    assert [(o.team_key, o.price_american, o.point) for o in spreads.outcomes] == [
+        ("TOR", -136, 1.5),
+        ("BAL", 113, -1.5),
+    ]
+
+    totals = market(book_game, "totals")
+    assert [(o.name, o.price_american, o.point) for o in totals.outcomes] == [
+        ("Over", -115, 8.5),
+        ("Under", -105, 8.5),
+    ]
+
+
+def test_open_phase_is_used_when_close_carries_no_price() -> None:
+    client = nested_client(
+        nested_odds_event(
+            moneyline={
+                "home": {"open": {"odds": "+108"}, "close": {}},
+                "away": {"open": {"odds": "-130"}},
+            }
+        )
+    )
+    (game,) = client.scoreboard("mlb", date(2026, 9, 18))
+    assert (game.home_moneyline, game.away_moneyline) == (108, -130)
+
+
+def test_mlb_details_moneyline_never_becomes_a_spread() -> None:
+    """For baseball `details` is the MONEYLINE ("CHC -149"). Priced as a spread it would
+    ask for a -149-run line no book offers, so it must contribute no spreads market."""
+    assert parse_spread_details("BAL -149") is None
+    client = nested_client(nested_odds_event(moneyline=NESTED_MONEYLINE, details="BAL -149"))
+    (book_game,) = EspnClient.to_book_games(client.scoreboard("mlb", date(2026, 9, 18)))
+    assert {m.key for m in book_game.books[0].markets} == {"h2h"}
+
+
+def test_nested_payload_without_prices_contributes_nothing() -> None:
+    """Blocks present but empty must not resurrect the assumed -110/-110."""
+    client = nested_client(
+        nested_odds_event(moneyline={}, point_spread={"home": {}, "away": {}}, total={})
+    )
+    assert EspnClient.to_book_games(client.scoreboard("mlb", date(2026, 9, 18))) == []
+
+
+def test_user_agent_names_a_recognised_http_client() -> None:
+    """ESPN's edge 403s a bare custom User-Agent (verified live 2026-09-18). Leading with
+    the real httpx token is what gets the request served; the app still identifies itself."""
+    assert USER_AGENT.startswith("python-httpx/")
+    assert "polymarket-edge-finder" in USER_AGENT

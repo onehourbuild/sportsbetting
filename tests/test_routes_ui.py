@@ -1016,3 +1016,96 @@ def test_bottom_nav_marks_active_page(client: TestClient):
     assert 'href="/settings" class="nav-item active" aria-current="page"' in settings
     diag = client.get("/diagnostics").text
     assert 'href="/diagnostics" class="nav-item active" aria-current="page"' in diag
+
+
+# ------------------------------------------------------------------ /games (the list page)
+#
+# Added because the app had no way to reach a game when there were no edges: the home page
+# IS the edge list, and with one low-weight book almost nothing clears the minimum edge, so
+# a correctly-working app showed an empty screen and nothing to click.
+
+
+def _seed_games(db_session) -> tuple[int, int]:
+    """Anchored on the real clock, because `/games` splits upcoming from started using
+    `get_now()` (the wall clock) and not the tests' FIXED_NOW."""
+    from datetime import UTC, datetime, timedelta
+
+    from app.models import Game, Market, Scan
+
+    now = datetime.now(UTC)
+    db_session.add(Scan(started_at=now, kind="both", leagues=["mlb"], ok=True))
+    upcoming = Game(
+        league="mlb",
+        home_key="CIN",
+        away_key="CHC",
+        home_name="Cincinnati Reds",
+        away_name="Chicago Cubs",
+        start_time=now + timedelta(hours=6),
+        book_game_id="espn:1",
+    )
+    started = Game(
+        league="mlb",
+        home_key="NYM",
+        away_key="PHI",
+        home_name="New York Mets",
+        away_name="Philadelphia Phillies",
+        start_time=now - timedelta(hours=6),
+    )
+    other_league = Game(
+        league="nfl",
+        home_key="BUF",
+        away_key="KC",
+        home_name="Buffalo Bills",
+        away_name="Kansas City Chiefs",
+        start_time=now + timedelta(days=1),
+    )
+    db_session.add_all([upcoming, started, other_league])
+    db_session.flush()
+    db_session.add(Market(id="m1", game_id=upcoming.id, market_type="moneyline", question="q"))
+    db_session.commit()
+    return upcoming.id, started.id
+
+
+def test_games_list_shows_upcoming_and_started_separately(client, db_session) -> None:
+    upcoming_id, started_id = _seed_games(db_session)
+    body = client.get("/games").text
+
+    assert "Chicago Cubs" in body and "Cincinnati Reds" in body
+    assert f'href="/games/{upcoming_id}"' in body
+    assert f'href="/games/{started_id}"' in body
+    assert "Started or finished" in body
+    # the one market on the upcoming game is counted
+    assert "1 market" in body
+
+
+def test_games_list_filters_by_league(client, db_session) -> None:
+    _seed_games(db_session)
+    mlb = client.get("/games?league=mlb").text
+    assert "Chicago Cubs" in mlb
+    assert "Kansas City Chiefs" not in mlb
+
+    nfl = client.get("/games?league=nfl").text
+    assert "Kansas City Chiefs" in nfl
+    assert "Chicago Cubs" not in nfl
+
+
+def test_games_list_flags_a_game_with_no_book_line(client, db_session) -> None:
+    _seed_games(db_session)
+    body = client.get("/games?league=nfl").text
+    assert "no book line" in body
+
+
+def test_games_list_is_empty_but_helpful_before_any_scan(client) -> None:
+    body = client.get("/games").text
+    assert "No scans yet" in body
+
+
+def test_games_list_requires_login(anon_client) -> None:
+    response = anon_client.get("/games", follow_redirects=False)
+    assert response.status_code in (302, 303)
+    assert "/login" in response.headers["location"]
+
+
+def test_edges_empty_state_links_to_the_games_list(client, db_session) -> None:
+    _seed_games(db_session)
+    assert 'href="/games' in client.get("/").text

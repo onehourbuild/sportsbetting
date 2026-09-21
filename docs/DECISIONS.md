@@ -694,3 +694,117 @@ renders it as an ordinary toast. Per-market taker-fee overrides the Polymarket c
 accepted or rejected are drained into `Scan.notes["conventions"]["taker_fee_overrides"]`
 per league (the client resets its list on every `events()` call) and shown on Diagnostics,
 because a rejected override changes every edge on that market.
+
+## 2026-09-18 — First live run: the User-Agent ESPN refuses, and the odds shape it moved to
+Everything below was found by pointing the real clients at the real APIs for the first time
+(the build environment could not reach them; see docs/RESEARCH.md). Polymarket Gamma and
+CLOB behaved as the source-derived notes predicted. ESPN did not, in two separate ways, and
+together they were the difference between a working app and an empty Edges page.
+
+**1. `site.api.espn.com` allowlists the User-Agent.** Every request carrying
+`polymarket-edge-finder/0.1 (+personal tool)` came back `403 Access Denied`; so did a
+browser string and an empty one. `curl/8.4.0`, `python-requests/2.31.0`, `okhttp/4.9.0`,
+`Go-http-client/2.0` and `python-httpx/0.28.1` were all served. The rule is evidently "name
+a recognised HTTP client", not "do not look like a bot", so `transport.USER_AGENT` now leads
+with the real httpx token and keeps the app's own name after it:
+`python-httpx/<version> polymarket-edge-finder/0.1 (+personal tool)`. That is honest — it is
+genuinely httpx — and it avoids impersonating a browser, which the earlier note asked for.
+A test asserts both halves, because a future tidy-up of this string silently returns the app
+to zero book data with no error anywhere.
+
+**2. ESPN's odds payload moved into nested per-market blocks.** The flat fields the parser
+read — `homeTeamOdds.moneyLine`, `homeTeamOdds.spreadOdds`, `overOdds`, `underOdds` — are
+all absent now. Prices live in `odds[0].moneyline.{home,away}.{open,close}.odds`,
+`odds[0].pointSpread.{home,away}.{open,close}.{line,odds}` and
+`odds[0].total.{over,under}.{open,close}.{line,odds}`, every value a **string**
+(`"+123"`, `"+1.5"`, `"o8.5"`). `close` is the latest quote, `open` the fallback. The old
+parser therefore read no price from any game, `to_book_games` returned an empty list, and a
+full live slate produced `matched=0, opps=0` — with no error, because "this game has no
+odds" is a legitimate state the code already handled quietly. `_parse_event` now reads the
+nested blocks, filling only what the legacy fields left unset so an older payload still wins
+on its own terms. Confirmed identical in shape for NFL and MLB.
+
+**A spread no longer comes from `details`.** The `pointSpread` block states each side's own
+signed line, which removes both the `details` string parsing and the team-token placement.
+That matters beyond tidiness: for baseball `details` carries the **moneyline**
+(`"CHC -149"`), and the old code would have parsed it as a −149-run spread and priced a
+market against a line no book offers. `parse_spread_details` additionally refuses any
+|line| > `MAX_SPREAD_POINTS` (60) so that payload cannot become a market by any route.
+
+**Left alone: the taker fee.** Live Gamma sends `takerBaseFee: 1000` on sports markets,
+which the basis-points reading turns into 0.10 — inside the plausible band, so it is
+accepted and applied — against the 0.05 coefficient Polymarket's fee documentation states
+(RESEARCH item 7). The unit stays unverified and the disagreement is unresolved, but the
+direction is safe: a fee that is too high understates edge and can only hide opportunities,
+never manufacture them. Recorded rather than "fixed" because guessing the other way is the
+dangerous half.
+
+## 2026-09-18 — Measuring whether any of this makes money
+Three additions, all answering one question the app could not answer about itself: it had
+logged 0 bets and 0 opportunities ever, while its stated success metric is P&L and CLV on
+logged bets. Verifying that data arrives and the arithmetic runs is not the same claim as
+verifying the strategy wins, and only the first had been done.
+
+**1. `forward_samples` — record everything, choose the threshold later.** `Opportunity`
+rows are only written above `prefs.min_edge`, so a database of them cannot answer "was 2%
+right?" — they *are* the 2% bets. Worse, against ESPN as the only book a live MLB slate
+topped out at **+0.17%** edge, so nothing ever cleared 2% and the ledger would have stayed
+empty forever. `forward.record_sample` therefore stores every outcome the scan can price,
+edge included whatever its sign, plus the depth at the best ask, the fee actually charged
+and the hours to kickoff. Grading comes from Polymarket's own resolution on a later scan.
+`forward-report` then buckets by threshold *after the fact*: the threshold question became
+a query instead of a guess. The tradability gates (closed / not accepting / already
+started) are duplicated from `build_opportunity` on purpose — an in-play price against a
+pre-game book line is not an edge, and grading one would quietly fabricate a result.
+
+**2. `/games` — the app was unreachable whenever it was working correctly.** The home page
+is the edge list and there was no games index, so with one low-weight book the owner saw an
+empty screen, no way in to the 232 games and 3,613 markets the scan had actually stored,
+and no reason to believe anything worked. A list page with league chips, market counts, a
+"no book line" marker and an upcoming/started split fixes that. Started games are shown
+separately and labelled rather than hidden, because they are exactly the ones that are no
+longer priceable.
+
+**3. `historical_samples` — the back test, and what it can honestly claim.** The obvious
+route is closed: CLOB `/prices-history` returns an **empty series for resolved markets**
+(verified on markets up to $400M of volume) and ESPN **strips odds from finished games**
+(verified on every September back to 2018). So neither the app's price source nor its book
+source remembers anything. Two endpoints do survive resolution — Gamma's `outcomePrices`,
+which names the winner, and `data-api/trades`, which still lists every timestamped trade —
+and `backtest.harvest` rebuilds each market's last **pre-kickoff** traded price from them.
+
+What that cannot do is test the app's actual strategy: historical book lines are paid data
+(The Odds API keeps them back to June 2020), so there is no historical fair value and no
+historical edge. What it does instead is test the assumption underneath — whether
+Polymarket's own price is well calibrated. If 60c favourites win 60% of the time there is
+no free money in the price and any edge must come from the books; if a band wins more often
+than it costs, that is an edge needing no book data at all. Trades after kickoff are
+dropped rather than used as a fallback, and a "close" more than 12 hours stale is excluded
+by default: both are the easy ways to manufacture a profitable back test out of nothing.
+
+Coverage ceiling, worth stating because it was asked for directly: Polymarket's per-game
+sports markets begin **Oct 2023 (NFL), Dec 2023 (NBA), Aug 2024 (MLB)**. A five-year back
+test is not expensive, it is impossible — the data does not exist.
+
+## 2026-09-18 — The back test's only "significant" result was an artefact
+The first full NFL harvest (6,522 graded outcomes, two seasons) produced exactly one band
+under p<0.05: 90-99c heavy favourites, implied 93.5% against an actual 85.7%, p=0.003.
+Taken at face value that is a standing instruction to fade heavy favourites.
+
+It is not real. Each side's closing price is its *own* last pre-kickoff trade, and an
+illiquid side can last have traded hours before the other, so the two prices are not one
+quote anyone could have traded against. Requiring both sides to be present, fresh and to
+sum to about 1.00 cut that band from 91 outcomes to 36 and the gap from -7.8% to -1.2%;
+tightening freshness to one hour flipped it to +7.4%. A result that changes sign with the
+staleness filter is a property of the filter.
+
+Hence `report(paired=True)` / `backtest-report --paired`, and `DEFAULT_MAX_PAIR_ERROR`
+(0.06 — real pairs sum a little over 1, observed median 1.010, because last-traded prices
+straddle the spread). On 5,048 paired NFL outcomes nothing is significant: 35-50c prices at
+45.1% and wins 45.0%, 50-65c prices at 54.6% and wins 53.6%. Polymarket's NFL and MLB
+prices are calibrated, every band loses money to the taker fee, and any edge has to come
+from the sportsbook side — the half that needs the paid historical data.
+
+Recorded because the near-miss is the lesson: the unpaired table looked like the answer
+the owner asked for ("the highest possible money-making strategy"), and shipping it would
+have been worse than finding nothing.
