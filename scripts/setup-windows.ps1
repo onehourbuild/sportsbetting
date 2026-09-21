@@ -165,6 +165,22 @@ function Find-Python311 {
 
 # ----------------------------------------------------------------------------- preflight
 
+# Everything after this runs unattended, so collect the one thing only you can supply
+# before it starts rather than five minutes in with you already out of the room.
+$envPath = [System.IO.Path]::Combine($InstallDir, '.env')
+$keyAlreadyStored = (Test-Path $envPath) -and
+    (Select-String -Path $envPath -Pattern '^ODDS_API_KEY=.+' -Quiet)
+if (-not $OddsApiKey -and -not $keyAlreadyStored) {
+    Write-Step 'Your Odds API key'
+    Write-Note 'Paste the key from https://the-odds-api.com (free, 500 credits a month),'
+    Write-Note 'then press Enter. The rest of the install needs nothing else from you.'
+    Write-Note ''
+    Write-Note 'Press Enter on its own to skip: fair value then comes from the ESPN'
+    Write-Note 'scoreboard alone, which is one soft source rather than a sharp consensus.'
+    $OddsApiKey = (Read-Host '    Odds API key').Trim()
+    if ($OddsApiKey) { Write-Win 'Key captured.' }
+}
+
 Write-Step 'Checking prerequisites'
 if (-not (Test-Command 'winget')) {
     throw 'winget is missing. Install "App Installer" from the Microsoft Store, then re-run this script.'
@@ -205,18 +221,7 @@ Write-Win 'Dependencies installed from the hashed lockfile.'
 # ----------------------------------------------------------------------------- config
 
 Write-Step 'Configuring'
-$envPath = [System.IO.Path]::Combine($InstallDir, '.env')
 $passphrase = $null
-
-# Without a key the app falls back to the ESPN scoreboard, which is one soft source rather
-# than a sharp consensus — the edges it produces are worth much less. Worth one prompt.
-$keyAlreadyStored = (Test-Path $envPath) -and
-    (Select-String -Path $envPath -Pattern '^ODDS_API_KEY=.+' -Quiet)
-if (-not $OddsApiKey -and -not $keyAlreadyStored) {
-    Write-Note 'Paste your key from https://the-odds-api.com (free, 500 credits a month).'
-    Write-Note 'Enter on its own skips it; you can add ODDS_API_KEY to .env later.'
-    $OddsApiKey = (Read-Host '    Odds API key').Trim()
-}
 if (Test-Path $envPath) {
     Write-Note '.env already exists — leaving it exactly as it is.'
 } else {
