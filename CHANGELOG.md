@@ -1,6 +1,10 @@
 # CHANGELOG
 
 ## Unreleased — v1 build (2026-09-18)
+- `app/services/us_import.py`: translates .us activity rows into the ledger's existing
+  `Fill`, so both feeds share one set of rules about what becomes a bet. Uses `isAggressor`
+  for real maker/taker (a maker pays no fee, which .com could never tell), and **refuses any
+  row that will not say which outcome it was on** rather than attaching it to a side.
 - `app/clients/polymarket_us_private.py`: Ed25519-signed reads of the owner's own .us
   activity feed, behind `PM_US_API_KEY` / `PM_US_API_SECRET` in `.env` (both `SecretStr`,
   both absent by default, importer off). Read-only by construction -- the module has no

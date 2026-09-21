@@ -68,6 +68,11 @@ class Fill:
     size: float
     when: datetime
     title: str
+    # "taker" or "maker". The .com trade feed does not say which a fill was, so it stays
+    # at the conservative default; .us publishes `isAggressor` and can fill this in. It
+    # matters: a maker pays the limit price and no fee at all, so recording a maker fill
+    # as a taker overstates its cost and understates the edge it was taken at.
+    mode: str = "taker"
 
 
 @dataclass
@@ -269,7 +274,7 @@ def import_fills(
         shares = sum(f.size for f in group)
         cost = sum(f.price * f.size for f in group)
         price = cost / shares
-        fee_per_share = taker_fee_per_share(price, fee_rate)
+        fee_per_share = 0.0 if first.mode == "maker" else taker_fee_per_share(price, fee_rate)
         fee_usd = shares * fee_per_share
         fair = fair_at(session, first.asset, placed_at)
         bet = Bet(
@@ -277,7 +282,7 @@ def import_fills(
             token=first.asset,
             outcome_key=outcome_key,
             outcome_name=outcome_name,
-            mode="taker",
+            mode=first.mode,
             price=round(price, 6),
             shares=round(shares, 6),
             stake_usd=round(cost + fee_usd, 2),

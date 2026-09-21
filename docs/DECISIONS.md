@@ -76,6 +76,32 @@ problem.
 Consequence: a missing tool now produces one accurate error naming the tool and
 saying the script is safe to re-run, instead of two contradictory ones.
 
+## 2026-09-21 - A .us fill is refused unless it says which outcome it was on
+The .us activity feed publishes `marketSlug`, `qty`, `price`, `createTime` and
+`isAggressor`, but the notes taken off the live API did not capture a field
+naming *which* of a market's two outcomes a trade was on. Since .us has no CLOB
+token id, the client synthesises `<marketSlug>#<index>`, so without that index
+there is nothing to key a bet to.
+
+Attaching such a row to outcome 0 would be the same class of error as guessing a
+spread side: the bet prices the opposite team, settles wrong, and looks entirely
+normal until it does. So `parse_activity` reads the index across the plausible
+spellings (`outcomeIndex`, `outcomeIdx`, `outcome_index`, and an explicit
+`tokenId`/`assetId`) and refuses the row otherwise, with a skip reason that
+names the fields it looked for - which turns the next live payload into a
+one-pass fix rather than another round of guessing.
+
+`isAggressor` is kept because it is something the .com feed never had. A maker
+pays the limit price and no fee at all; a taker pays the fee on top. Recording a
+maker fill as a taker overstates what the bet cost and understates the edge it
+was taken at. `Fill` therefore gains a `mode`, defaulting to "taker" so the .com
+path is unchanged - .com cannot tell, and taker is the expensive reading and so
+the safe assumption.
+
+Translation only: the .us path hands off to `wallet_import.import_fills`, so
+grouping, deduplication, the kickoff cutoff, fair value at bet time and the Bet
+row are one implementation shared by both feeds rather than two that drift.
+
 ## 2026-09-21 - The .us client refuses spreads rather than guess a side
 On polymarket.us the market titled "Los Angeles Rams wins by over 6.5 points"
 carries the question "Will the New York Giants cover 6.5 points?" and outcomes
