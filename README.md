@@ -226,6 +226,7 @@ Read the limits before you read the numbers:
 | `make docker-build` | Build the image locally |
 
 CLI: `python -m app.cli scan --kind poly|books|both [--league nfl]`, `settle`,
+`import-wallet [--wallet 0x...]` (log your Polymarket fills into the ledger, read-only),
 `demo-seed`, `demo-clear`.
 
 ## Environment

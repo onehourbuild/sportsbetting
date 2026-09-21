@@ -44,3 +44,15 @@ total **only** when both of that market's sides are priced (it never invents -11
 without those fields the fixture would silently exercise only the moneyline path. The NBA
 and MLB scoreboards deliberately carry no `odds` block at all, which is the other half of
 that path: a scoreboard game the fallback can see but cannot price.
+
+## Wallet trades fixture (`data_trades_wallet.json`)
+
+The data-api `/trades?user=` response for the demo wallet `0xabab…abab`, newest first,
+eight rows that exercise every rule in `app/services/wallet_import.py`: a Cowboys SELL
+(skipped as an exit), a Chiefs BUY as two fills in one transaction (one bet at the
+volume-weighted price, placed 2026-09-19 15:30Z so the fixed 15:00Z scan has already
+priced it), an Orioles BUY after the 2026-09-17 23:07Z kickoff (skipped), an Orioles BUY
+before it (imported, then settled lost by the next scan), a market the slate does not
+contain, an asset that is not one of the market's tokens, and a row with no price.
+Condition ids and token ids match `gamma_events_nfl.json` / `gamma_events_mlb.json`.
+

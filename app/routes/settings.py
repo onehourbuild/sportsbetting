@@ -54,6 +54,7 @@ def prefs_to_values(prefs: Prefs) -> dict[str, Any]:
     )
     values["leagues_enabled"] = list(prefs.leagues_enabled or [])
     values["espn_fallback_enabled"] = bool(prefs.espn_fallback_enabled)
+    values["pm_wallet"] = prefs.pm_wallet or ""
     return values
 
 
@@ -69,6 +70,7 @@ def form_to_values(form: FormData) -> dict[str, Any]:
         str(v).strip().lower() for v in form.getlist("leagues_enabled") if str(v).strip()
     ]
     values["espn_fallback_enabled"] = "espn_fallback_enabled" in form
+    values["pm_wallet"] = str(form.get("pm_wallet", "") or "").strip()
     return values
 
 
@@ -112,6 +114,7 @@ def values_to_update(values: dict[str, Any]) -> dict[str, Any]:
     data["book_weights"] = parse_book_weights(values.get("book_weights", "") or "")
     data["leagues_enabled"] = list(values.get("leagues_enabled") or [])
     data["espn_fallback_enabled"] = "on" if values.get("espn_fallback_enabled") else "off"
+    data["pm_wallet"] = values.get("pm_wallet", "") or ""
     return data
 
 

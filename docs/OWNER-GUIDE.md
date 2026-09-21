@@ -5,30 +5,34 @@ handoff see `docs/HANDOFF.md`; for the current state see the latest `docs/STATUS
 
 ## How do I record a bet I placed?
 
-**In the app (the way it is designed).** Home page (Edges) lists what cleared `min_edge`
-on the latest scan. Tap a row, tap **Log bet**, and enter the stake in dollars, the price
-you actually got (cents or a 0-1 fraction both work), whether you were a **taker** (hit the
-ask) or a **maker** (your resting order got filled), and any note. It lands in **Bets**
-(`/bets`) with your entry price, the fair value the app had at the time, and the current
-Polymarket mark. When the market resolves the app settles it from Polymarket's own
-result and records closing line value.
+**Automatically, from your wallet (Polymarket).** Open Settings, scroll to *Polymarket
+wallet*, paste your wallet address (it is under your profile on Polymarket; it is public
+information, not a key) and save. From then on every scan reads Polymarket's public trade
+feed for that address and logs each pre-game BUY as a taker bet in **Bets**, with the
+price you actually paid, the shares, the fee, and the fair value the app had for that
+outcome at the time. Nothing is logged twice, a bet placed and resolved between two scans
+is imported and settled in one pass, and imported bets carry an "imported" badge. What it
+skips, and lists under Diagnostics so you can see it: sales (exits are not modelled yet),
+fills placed after kickoff, and markets the app does not track.
 
-Two limits to know about, as of 2026-09-20:
+To run it by hand instead of waiting for a scan:
 
-- A bet can only be logged against an edge the app found. There is no freehand form for
-  "I bet something the app did not flag". If you want that, it is a small build item.
-- Kalshi is not wired up. The app reads Polymarket only; a Kalshi client is the first
-  item on the open-work list in `docs/HANDOFF.md`, and the endpoint notes in
-  `docs/STATUS-2026-09-20.md` are enough to build it.
+```bash
+python -m app.cli import-wallet
+```
 
-**Telling Claude in chat.** Just say it in one line with these six things:
+**From an edge card (the original way).** Home page (Edges), tap a row, tap **Log bet**,
+enter stake, price, taker or maker. Use this for a bet you placed as a maker (a resting
+order that got filled) since the wallet import cannot tell maker from taker and assumes
+taker.
+
+**Kalshi is not wired up.** The app reads Polymarket only; a Kalshi client is the first
+item on the open-work list in `docs/HANDOFF.md`, and the endpoint notes in
+`docs/STATUS-2026-09-20.md` are enough to build it. Until then, tell Claude in chat:
 
 > venue, game, side, market and line, price, size, taker or maker
 
-Example: "Polymarket, Giants at Rams Monday, Rams -6.5, bought 8 shares at 53c, taker."
-That is enough to compute edge against the book consensus at that moment, put it in the
-ledger (once the freehand form exists) and grade it later. Screenshots of the Polymarket
-or Kalshi order confirmation work too.
+Example: "Kalshi, Giants at Rams Monday, Rams to win, bought 8 contracts at 74c."
 
 ## Worked example: Monday Night Football, Giants at Rams (21 Sep 2026, 8:15 pm ET)
 

@@ -64,6 +64,13 @@
     </div>
   </section>
 
+  <section class="card">
+    <h2 class="sub">Polymarket wallet</h2>
+    <label class="field"><span>Wallet address (imports your fills into the ledger; blank = off)</span>
+      <input name="pm_wallet" value="{{ values.pm_wallet }}" placeholder="0x..." autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+    <p class="muted small">Read-only. On every scan the app reads the public trade feed for this address and logs each pre-game BUY as a taker bet, keyed by transaction so nothing is logged twice. It never places orders and holds no key. The address is shown under your profile on Polymarket.</p>
+  </section>
+
   <button type="submit" class="btn btn-primary btn-block">Save settings</button>
 </form>
 

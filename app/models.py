@@ -61,6 +61,8 @@ DEFAULT_PREFS: dict[str, Any] = {
     "match_window_hours": 36.0,
     "min_liquidity_usd": 100.0,
     "stale_book_minutes": 720,
+    # Polymarket proxy wallet (0x + 40 hex) whose fills are imported into the ledger; "" = off.
+    "pm_wallet": "",
 }
 
 
@@ -298,6 +300,11 @@ class Bet(Base):
     closing_pm_price: Mapped[float | None] = mapped_column(Float)
     clv: Mapped[float | None] = mapped_column(Float)
     notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    # "manual" (logged from an edge card) or "wallet" (imported from the owner's Polymarket
+    # fills). An imported bet carries the "<transactionHash>:<asset>" it came from so a
+    # re-import is a no-op.
+    source: Mapped[str] = mapped_column(String(8), nullable=False, default="manual")
+    import_key: Mapped[str | None] = mapped_column(String(160), index=True)
 
     market: Mapped[Market] = relationship(back_populates="bets")
 
@@ -456,6 +463,7 @@ class Prefs(Base):
     match_window_hours: Mapped[float] = mapped_column(Float, nullable=False, default=36.0)
     min_liquidity_usd: Mapped[float] = mapped_column(Float, nullable=False, default=100.0)
     stale_book_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=720)
+    pm_wallet: Mapped[str] = mapped_column(String(42), nullable=False, default="")
     updated_at: Mapped[datetime] = mapped_column(
         UtcDateTime, nullable=False, default=utcnow, onupdate=utcnow
     )

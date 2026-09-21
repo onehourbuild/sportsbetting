@@ -39,6 +39,10 @@ log = logging.getLogger(__name__)
 
 GAMMA = "https://gamma-api.polymarket.com"
 CLOB = "https://clob.polymarket.com"
+DATA_API = "https://data-api.polymarket.com"
+# data-api /trades pages by offset, newest first (verified live 2026-09-20).
+WALLET_TRADES_PAGE = 500
+MAX_WALLET_PAGES = 10
 
 EVENTS_PAGE_SIZE = 100
 TEAMS_PAGE_SIZE = 500
@@ -113,6 +117,13 @@ def _as_float(value: Any) -> float | None:
         except ValueError:
             return None
     return None
+
+
+def _as_int(value: Any) -> int | None:
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
 
 
 def _as_bool(value: Any, default: bool = False) -> bool:
@@ -390,6 +401,44 @@ class PolymarketClient:
         return teams
 
     # -- requests ------------------------------------------------------------
+
+    def wallet_trades(self, wallet: str, *, since: datetime | None = None) -> list[dict[str, Any]]:
+        """Every fill by `wallet` from data-api `/trades?user=` (keyless, newest first).
+
+        Verified live 2026-09-20: each row carries `proxyWallet`, `side` (BUY|SELL),
+        `asset` (CLOB token id), `conditionId`, `size` (shares), `price`, `timestamp`
+        (epoch seconds), `title`, `outcome`, `outcomeIndex` and `transactionHash`. Pages by
+        `offset` until a short page, `MAX_WALLET_PAGES`, or the first row older than
+        `since`. Rows that are not objects are dropped; a non-list payload is an error.
+        """
+        wallet = (wallet or "").strip().lower()
+        if not wallet:
+            raise ValueError("wallet must not be empty")
+        since_ts = int(since.timestamp()) if since is not None else None
+        rows: list[dict[str, Any]] = []
+        for page in range(MAX_WALLET_PAGES):
+            params = {
+                "user": wallet,
+                "limit": WALLET_TRADES_PAGE,
+                "offset": page * WALLET_TRADES_PAGE,
+                "takerOnly": "false",
+            }
+            payload = self._get(f"{DATA_API}/trades", params, "wallet trades")
+            if not isinstance(payload, list):
+                raise PolymarketError(
+                    f"data-api trades: expected a list, got {type(payload).__name__}"
+                )
+            page_rows = [dict(r) for r in payload if isinstance(r, Mapping)]
+            rows.extend(page_rows)
+            if len(payload) < WALLET_TRADES_PAGE:
+                break
+            if since_ts is not None and any(
+                _as_int(r.get("timestamp")) is not None and _as_int(r.get("timestamp")) < since_ts
+                for r in page_rows
+            ):
+                break
+        log.info("data-api trades for %s…%s: %d rows", wallet[:6], wallet[-4:], len(rows))
+        return rows
 
     def _get(self, url: str, params: Mapping[str, Any], what: str) -> Any:
         try:

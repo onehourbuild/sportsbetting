@@ -17,7 +17,7 @@
       <div><dt>Now ask</dt><dd>{{ v.current_ask|cents }}</dd></div>
       <div><dt>Mark net</dt><dd class="{{ 'good' if (v.mark_pnl or 0) > 0 else ('bad' if (v.mark_pnl or 0) < 0 else '') }}">{{ v.mark_pnl|usd_signed }}</dd></div>
     </dl>
-    <p class="muted small">mark = sold at the bid net of the exit taker fee · placed {{ v.bet.placed_at|ago }}{% if v.bet.fee_usd %} · fee {{ v.bet.fee_usd|usd }}{% endif %}{% if v.bet.closing_fair is not none %} · closing fair {{ v.bet.closing_fair|pct }} · CLV {{ v.bet.clv|signed_pct }}{% endif %}{% if v.bet.notes %} · {{ v.bet.notes }}{% endif %}</p>
+    <p class="muted small">mark = sold at the bid net of the exit taker fee · placed {{ v.bet.placed_at|ago }}{% if v.bet.fee_usd %} · fee {{ v.bet.fee_usd|usd }}{% endif %}{% if v.bet.closing_fair is not none %} · closing fair {{ v.bet.closing_fair|pct }} · CLV {{ v.bet.clv|signed_pct }}{% endif %}{% if v.bet.source == 'wallet' %} · <span class="badge badge-info">imported</span>{% endif %}{% if v.bet.notes %} · {{ v.bet.notes }}{% endif %}</p>
     {% if not compact %}
     <div class="settle-row">
       <button class="btn btn-sm" type="button" hx-post="/bets/{{ v.bet.id }}/settle" hx-vals='{"result": "won"}'

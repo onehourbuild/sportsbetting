@@ -907,3 +907,37 @@ from the sportsbook side — the half that needs the paid historical data.
 Recorded because the near-miss is the lesson: the unpaired table looked like the answer
 the owner asked for ("the highest possible money-making strategy"), and shipping it would
 have been worse than finding nothing.
+
+## 2026-09-20 — Bets are imported from the wallet's public fills, not entered by hand
+The ledger could only be written from an edge card. A bet the owner placed by hand, or on
+a market the app never flagged, was invisible to settlement and CLV, and the owner's
+first question after deploying was "how do you log my bets automatically". The answer
+that keeps the money-safety boundary intact is Polymarket's public trade feed
+(`data-api.polymarket.com/trades?user=<wallet>`), which needs no key, is the same feed
+anyone can read for any address, and is checked live: it carries the transaction hash,
+token id, condition id, side, price, size and timestamp of every fill.
+
+Choices worth recording:
+
+- **One transaction, one bet.** An order that walks the book lands as several fills in one
+  transaction; they are summed and priced at the volume-weighted average. The dedup key
+  is `transactionHash:asset`, so the same fill can never be logged twice however often
+  the scan runs.
+- **SELLs are skipped, visibly.** v1 does not model exits; a sale is counted and listed
+  rather than dropped, so the ledger never silently disagrees with the exchange.
+- **Fills after kickoff are skipped.** A pre-game closing line says nothing about an
+  in-play price; the CLV would be fiction. Same rule as the forward test.
+- **Only tracked markets.** The feed covers everything the wallet ever traded (esports,
+  politics). Anything whose `conditionId` the app has not scanned is reported as unknown
+  rather than looked up, so the importer never adds a market the pricing pipeline has
+  never seen.
+- **Taker fee assumed.** The feed does not say whether a fill was maker or taker, and
+  `takerOnly=false` changed nothing on a live wallet. Assuming taker is the conservative
+  reading: it can understate an edge, never invent one. A maker/taker split needs the
+  authenticated CLOB API and stays out of scope.
+- **The import runs before settlement** in the same scan, so a bet placed and resolved
+  between two scans is imported, settled and given its closing line in one pass.
+- **A failing feed cannot fail a scan**, and the hook does not roll back: the importer
+  commits once at its end, and a rollback in the hook was found (by test) to discard the
+  scan's own flushed rows.
+

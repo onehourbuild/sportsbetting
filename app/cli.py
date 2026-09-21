@@ -1,4 +1,4 @@
-"""`python -m app.cli scan|settle|demo-seed|demo-clear|forward-report`."""
+"""`python -m app.cli scan|settle|import-wallet|demo-seed|demo-clear|forward-report`."""
 
 from __future__ import annotations
 
@@ -58,6 +58,44 @@ def cmd_settle(args: argparse.Namespace) -> int:
     for err in result.errors:
         print(f"  error: {err}")
     return 0 if not result.errors else 1
+
+
+def cmd_import_wallet(args: argparse.Namespace) -> int:
+    """Import the owner's Polymarket fills into the ledger (read-only; see wallet_import)."""
+    from datetime import UTC, datetime
+
+    from app.clients.polymarket import PolymarketClient
+    from app.clients.transport import HttpTransport
+    from app.services.prefs import get_prefs
+    from app.services.wallet_import import import_wallet_trades
+
+    settings = get_settings()
+    with _session() as session:
+        prefs = get_prefs(session)
+        wallet = (args.wallet or prefs.pm_wallet or "").strip()
+        if not wallet:
+            print("no wallet: set it in Settings or pass --wallet 0x...", file=sys.stderr)
+            return 2
+        if settings.demo_mode:
+            from app.services.demo import DEMO_NOW, build_demo_transport
+
+            transport = build_demo_transport(settings)
+            now = DEMO_NOW
+        else:
+            transport = HttpTransport()
+            now = datetime.now(UTC)
+        try:
+            result = import_wallet_trades(
+                session, PolymarketClient(transport), wallet=wallet, now=now, prefs=prefs
+            )
+        finally:
+            close = getattr(transport, "close", None)
+            if callable(close):
+                close()
+    print(result.summary())
+    for reason, n in sorted(result.skipped_counts.items()):
+        print(f"  skipped {n}: {reason}")
+    return 0
 
 
 def cmd_demo_seed(args: argparse.Namespace) -> int:
@@ -180,6 +218,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     settle = sub.add_parser("settle", help="refresh Polymarket and settle open bets")
     settle.set_defaults(func=cmd_settle)
+
+    imp = sub.add_parser(
+        "import-wallet", help="import your Polymarket fills into the bet ledger (read-only)"
+    )
+    imp.add_argument("--wallet", default=None, help="0x address; default: the Settings value")
+    imp.set_defaults(func=cmd_import_wallet)
 
     demo = sub.add_parser("demo-seed", help="seed synthetic fixture data (dev / DEMO_MODE only)")
     demo.set_defaults(func=cmd_demo_seed)

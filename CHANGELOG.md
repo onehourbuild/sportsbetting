@@ -2,6 +2,21 @@
 
 ## Unreleased — v1 build (2026-09-18)
 
+### Wallet import (2026-09-20)
+- **Your Polymarket fills become ledger rows** (`app/services/wallet_import.py`). Set your
+  proxy wallet address under Settings, Polymarket wallet, and every scan reads data-api
+  `/trades?user=` (public, keyless) and logs each pre-game BUY as a taker bet: fills in one
+  transaction on one outcome are one bet at the volume-weighted price, keyed by
+  `transactionHash:asset` so a re-import is a no-op, with `fair_at_bet` taken from the
+  app's latest pricing of that outcome at or before the fill. SELLs, fills after kickoff,
+  markets the app does not track, and unparseable rows are counted and listed under
+  Diagnostics, Other notes, `wallet_import`. Imported bets show an "imported" badge in the
+  ledger; settlement and CLV treat them like any other bet. `python -m app.cli
+  import-wallet [--wallet 0x...]` runs it on demand. Read-only: no key, no orders.
+- `Bet.source` ("manual" | "wallet") and `Bet.import_key`; `Prefs.pm_wallet`. Both added
+  to existing databases by `add_missing_columns` on start.
+- 16 new tests (`tests/test_wallet_import.py`) over `fixtures/data_trades_wallet.json`.
+
 ### First live read (2026-09-20)
 - `docs/STATUS-2026-09-20.md`: the app is deployed (two installs on the owner's PC), the
   client parsers matched live payloads, "market closed" on Diagnostics was verified against

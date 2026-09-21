@@ -234,3 +234,20 @@ responses, and they supersede the matching "Unverified" entries.
     longer used when `pointSpread` is present and is bounded by `MAX_SPREAD_POINTS`.
 22. Still unverified: settlement from `outcomePrices` after a real resolution, CLV capture
     from a real closing snapshot, and every Odds API code path (no key was available).
+
+## Verified live 2026-09-20 (wallet import and Kalshi)
+
+- `GET https://data-api.polymarket.com/trades?user=<wallet>&limit=500&offset=N` is public
+  and keyless, returns a JSON list newest first, and pages by `offset`. Each row:
+  `proxyWallet`, `side` (BUY|SELL), `asset` (CLOB token id), `conditionId`, `size`
+  (shares), `price`, `timestamp` (epoch seconds), `title`, `slug`, `eventSlug`,
+  `outcome`, `outcomeIndex`, `transactionHash`, plus profile fields. `takerOnly=false`
+  returned the same 336 rows as the default for a live wallet. Same host rate-limits
+  fast loops (see the back test's backoff); the importer makes one request per 500 fills.
+- Kalshi public API (no key): `GET https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker=KXNFLGAME&status=open`
+  lists game markets (ticker `KXNFLGAME-26SEP21NYGLAR-LAR`). The list endpoint returned
+  `null` prices; `GET /markets/{ticker}` carries them as strings in `yes_bid_dollars`,
+  `yes_ask_dollars`, `no_bid_dollars`, `no_ask_dollars`, sizes in `*_size_fp`, and
+  `GET /markets/{ticker}/orderbook?depth=5` gives `orderbook_fp.yes_dollars` /
+  `no_dollars` as `[price, size]` pairs. `close_time` is not kickoff (three days after).
+

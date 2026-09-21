@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from typing import Any
 
@@ -28,6 +29,9 @@ _INT_RANGES: dict[str, tuple[int, int]] = {
     "stale_book_minutes": (0, 60 * 24 * 30),
 }
 _BOOL_FIELDS: frozenset[str] = frozenset({"espn_fallback_enabled"})
+_WALLET_FIELDS: frozenset[str] = frozenset({"pm_wallet"})
+# An Ethereum-style address: Polymarket's proxy wallets are ordinary 20-byte addresses.
+WALLET_RE = re.compile(r"^0[xX][0-9a-fA-F]{40}$")
 _KNOWN_FIELDS: frozenset[str] = frozenset(DEFAULT_PREFS)
 
 
@@ -71,6 +75,8 @@ def validate_prefs(data: Mapping[str, Any]) -> dict[str, Any]:
             cleaned[key] = _validate_int(key, raw)
         elif key in _BOOL_FIELDS:
             cleaned[key] = _validate_bool(key, raw)
+        elif key in _WALLET_FIELDS:
+            cleaned[key] = _validate_wallet(key, raw)
         elif key == "devig_method":
             cleaned[key] = _validate_devig(raw)
         elif key == "bookmakers":
@@ -157,6 +163,20 @@ def _validate_bool(key: str, raw: Any) -> bool:
         if text in {"0", "false", "no", "off", "n", ""}:
             return False
     raise ValueError(f"{key} must be true or false, got '{raw}'")
+
+
+def _validate_wallet(key: str, raw: Any) -> str:
+    """Empty (off) or a 0x-prefixed 40-hex address, stored lower-case."""
+    if raw is None:
+        return ""
+    if not isinstance(raw, str):
+        raise ValueError(f"{key} must be text")
+    value = raw.strip()
+    if not value:
+        return ""
+    if not WALLET_RE.match(value):
+        raise ValueError(f"{key} must be a 0x address of 40 hex characters, got '{value}'")
+    return value.lower()
 
 
 def _validate_devig(raw: Any) -> str:

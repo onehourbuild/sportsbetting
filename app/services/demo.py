@@ -18,7 +18,7 @@ from app.clients.espn import DEFAULT_BASE as ESPN_BASE
 from app.clients.espn import ESPN_PATHS, EspnClient
 from app.clients.oddsapi import DEFAULT_BASE as ODDS_BASE
 from app.clients.oddsapi import SPORT_KEYS, OddsApiClient
-from app.clients.polymarket import CLOB, GAMMA, PolymarketClient
+from app.clients.polymarket import CLOB, DATA_API, GAMMA, PolymarketClient
 from app.clients.transport import FixtureTransport, Route, TransportError, load_fixture
 from app.core import clv as clv_math
 from app.core.edge import taker_fee_per_share
@@ -70,6 +70,7 @@ def demo_routes(fixtures_dir: Any) -> list[Route]:
         routes.append(("GET", f"{GAMMA}/events?tag_slug={league}", f"gamma_events_{league}.json"))
         routes.append(("GET", f"{GAMMA}/teams?league={league}", f"gamma_teams_{league}.json"))
     routes.append(("POST", f"{CLOB}/books", "clob_books.json"))
+    routes.append(("GET", f"{DATA_API}/trades", "data_trades_wallet.json"))
     routes.append(("GET", f"{GAMMA}/markets/", _gamma_market_route(fixtures_dir)))
     for league in LEAGUES:
         routes.append(

@@ -67,7 +67,7 @@ from app.models import (
     Scan,
 )
 from app.services import bets as bets_service
-from app.services import forward
+from app.services import forward, wallet_import
 from app.services.adapters import RESOLVED_LETTER, stored_book_game
 from app.services.prefs import get_prefs
 from app.settings import Settings, get_settings
@@ -710,6 +710,22 @@ def run_scan(
                 log.exception("scan of %s failed", league)
                 state.error(league, "scan", exc)
         session.flush()
+        # The owner's own Polymarket fills become ledger rows before settlement runs, so a
+        # bet placed and resolved between two scans is imported, settled and given its
+        # closing line by this one scan.
+        wallet = str(_pref(prefs, "pm_wallet") or "").strip()
+        wallet_note: dict[str, Any] | None = None
+        if wallet:
+            try:
+                wallet_note = wallet_import.import_wallet_trades(
+                    session, polymarket, wallet=wallet, now=now, prefs=prefs
+                ).as_note()
+            except Exception as exc:  # noqa: BLE001 - the ledger import must not fail a scan
+                # No rollback: the import commits only once, at its end, so a failure
+                # before that leaves nothing of its own pending, and a rollback here would
+                # discard this scan's own flushed rows.
+                log.exception("wallet import failed")
+                state.error("wallet", "import", exc)
         _markets_for_open_bets(session, polymarket, state)
         # Closing first: a bet whose market resolved between two scans is settled by this
         # same scan and must still get its closing line (capture_closing reads pre-kickoff
@@ -771,6 +787,8 @@ def run_scan(
         notes["conventions"]["events_filters_dropped"] = True
     if state.quota_used is not None or state.credits_remaining is not None:
         notes["quota"] = {"used": state.quota_used, "remaining": state.credits_remaining}
+    if wallet_note is not None:
+        notes["wallet_import"] = wallet_note
     scan.notes = notes
     # A scan that saw nothing at all and only errors is a failure; partial results are ok.
     scan.ok = not (state.errors and state.n_markets == 0)
