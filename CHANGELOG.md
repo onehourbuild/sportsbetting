@@ -57,6 +57,22 @@
   trap, an empty block contributing nothing, and the User-Agent contract. Suite 1198 green.
 - Net effect on a live MLB slate: `matched` 0 → 206, book quotes 0 → 146, and the edge math
   runs (best observed edge +0.17% against a 2% threshold, i.e. correctly reporting no bet).
+- requirements.lock is now resolved with `--universal`, so platform markers survive:
+  uvloop (no Windows wheel, setup.py refuses to build there) is excluded from Windows and
+  colorama is included for it. Guarded offline by tests/test_requirements_lock.py and
+  online by scripts/audit_lock_windows.py.
+- Windows scripts are ASCII-only, enforced by tests/test_windows_scripts.py: PowerShell
+  5.1 reads a .ps1 as Windows-1252, so a UTF-8 em dash in a comment broke the parse before
+  the first line ran. The same test pins the winget ids to their manifest spelling.
+- Windows tool installs: corrected the case-sensitive winget id for Tailscale, find tools
+  that are installed but off PATH, decide success by locating the executable rather than
+  by winget's exit code, and fall back to the Tailscale MSI.
+- Windows install fixed after its first real run: `scripts/bootstrap-windows.ps1` installs
+  from a zip over HTTP through `irm | iex` (no Git, no execution-policy wall),
+  `setup-windows.ps1` self-elevates instead of relying on `#Requires`, and the Odds API
+  key is prompted for rather than passed as a command-line argument. `docs/WINDOWS.md`
+  documents the three failures and how each is avoided.
+- `docs/HANDOFF.md`: the state a fresh session needs to pick the build back up.
 - Adjusted build prompt, spec, research notes, architecture contract.
 - Scaffold: pyproject/requirements/Makefile/Dockerfile/fly.toml/CI, Settings, db, models
   (all 8 tables), core types, transport (Http + Fixture), prefs service, templating
@@ -159,3 +175,17 @@
   own `.table-wrap`.
 - `docs/PHONE.md`: deploy-to-Fly and Add-to-Home-Screen guide, iOS PWA caveats, first-run
   demo seed and troubleshooting.
+- `docs/WINDOWS.md` and `scripts/run-windows.ps1`: self-host on an always-on Windows
+  desktop, reached from the phone over a Tailscale HTTPS address, started by Task
+  Scheduler. Covers the prod-on-your-own-machine settings (`APP_ENV=prod` for the Secure
+  cookie, `TRUSTED_PROXY_HEADER=x-forwarded-for` because Tailscale proxies from loopback)
+  and what the scheduler costs in Odds API credits once the host never sleeps.
+- `scripts/setup-windows.ps1`: one admin-PowerShell command does the whole Windows
+  install — winget for Git/Python/Tailscale, clone, venv from the hashed lockfile, a
+  generated passphrase and secret key written to a BOM-free `.env` (a UTF-8 BOM makes
+  pydantic read `\ufeffAPP_ENV` and silently start in dev), the scheduled task, sleep
+  disabled, a health-check wait, then `tailscale serve`. Idempotent; never overwrites an
+  existing `.env`. Paths use `Path::Combine` rather than `Join-Path`, which resolves its
+  argument through the PowerShell provider and throws on a drive that does not exist.
+  The three steps it cannot do — Tailscale sign-in, the HTTPS-certificates toggle, and
+  the phone — are called out where they fall.

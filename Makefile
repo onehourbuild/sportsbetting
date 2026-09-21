@@ -8,7 +8,7 @@ setup:
 
 # Re-resolve requirements.txt into the hashed lock that Docker, CI and setup install from.
 lock:
-	uv pip compile requirements.txt -o requirements.lock --generate-hashes --python-version 3.11
+	uv pip compile requirements.txt -o requirements.lock --generate-hashes --python-version 3.11 --universal
 
 run:
 	$(PY) -m uvicorn app.main:app --reload --port 8000

@@ -6,9 +6,11 @@ fractional Kelly, logs them, settles them from Polymarket's own resolution, and
 tracks closing line value (CLV). Runs as a PWA you add to your home screen. It never
 places orders: you tap through to Polymarket to trade.
 
-The docs: `SPEC.md` (what it does), `docs/PHONE.md` (deploy it and put it on your
-phone), `docs/ARCHITECTURE.md` (module contract), `docs/RESEARCH.md` (API notes and the
-unverified list), `docs/DECISIONS.md` (why).
+The docs: `SPEC.md` (what it does), `docs/PHONE.md` (deploy it to Fly and put it on
+your phone), `docs/WINDOWS.md` (host it free on a Windows desktop over Tailscale
+instead), `docs/ARCHITECTURE.md` (module contract), `docs/RESEARCH.md` (API notes and
+the unverified list), `docs/DECISIONS.md` (why), `docs/HANDOFF.md` (current state and
+what to do next, for picking the build back up).
 
 ## Try it locally in two minutes (no keys, synthetic data)
 
@@ -120,6 +122,14 @@ Also worth saying plainly: this app is **single-user**. There is one password an
 ledger. Anyone you give the link and password to sees your bankroll and your P&L, and can
 log and settle bets in your ledger. Fine for looking at the edge list together; not a
 shared betting app.
+
+## Free, on a machine you already own
+
+`docs/WINDOWS.md` hosts it on an always-on Windows desktop and reaches it from the phone
+over Tailscale, which gives a real HTTPS certificate on a private address — so the PWA
+installs, nothing is exposed to the public internet, and there is no hosting bill. The
+trade is that the app is up only while that machine is. Being always on also makes the
+background scheduler worth enabling, which the Fly setup can't do while it sleeps.
 
 ## Anywhere else (plain Docker, Railway, Render)
 

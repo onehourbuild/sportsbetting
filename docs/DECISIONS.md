@@ -2,6 +2,105 @@
 
 Each entry: date, decision, why, consequences.
 
+## 2026-09-21 - The lockfile resolves universally, not for the build machine
+`uv pip compile` without `--universal` resolves for the machine it runs on and
+drops the environment markers. Generated on Linux, that produced a lock which
+pinned `uvloop` unconditionally - a package that ships Linux and macOS wheels
+only, and whose setup.py raises "uvloop does not support Windows at the moment"
+- so pip fell through to building it from source and the Windows install died
+there. The same resolve also silently dropped `colorama`, which uvicorn needs
+for coloured output on Windows and nowhere else.
+
+`make lock` now passes `--universal`, so markers are preserved: uvloop carries
+`sys_platform != 'win32'` and colorama carries `sys_platform == 'win32'`.
+
+This was findable from Linux and was not found, so it gets two guards.
+`tests/test_requirements_lock.py` is offline and runs in CI: it reads uv's own
+recorded command out of the lock header to confirm `--universal`, and checks
+the two markers directly. `scripts/audit_lock_windows.py` is the online half,
+run by hand after a dependency change: it asks PyPI whether every locked
+version ships something installable on win_amd64 - a win_amd64 wheel or a
+pure-python one - and names anything that would force a source build. Run
+against the old lock it reports uvloop with macOS and manylinux wheels only;
+against the new one, 38 of 38 installable.
+
+Consequence: the lock is bigger, since it carries pins for platforms this
+project does not deploy to. That is the cost of a lock that is true everywhere
+it is used rather than only where it was made.
+
+## 2026-09-21 - The Windows scripts are ASCII-only, enforced by a test
+An em dash in a comment killed the installer before its first line ran. Windows
+PowerShell 5.1 - the one every Windows machine ships with, and the one the
+installer actually runs under - reads a .ps1 as Windows-1252 unless the file
+carries a UTF-8 BOM. A UTF-8 em dash (E2 80 94) therefore arrives as three
+mojibake characters, one of which reads as a quote and closes the string it is
+sitting in. The result is a parse error, pointing at a line that looks perfectly
+fine in any editor.
+
+The parse checks run here never caught it because PowerShell 7 defaults to
+UTF-8, so the file parsed cleanly in exactly the place it was being checked and
+broke in exactly the place it was being used.
+
+Adding a BOM would fix the reading, but a BOM is echoed as garbage from a .bat
+and makes for noisy diffs. So the scripts are plain ASCII instead, and
+tests/test_windows_scripts.py enforces it in CI, naming the file, line and
+codepoint on failure. The same test pins the winget ids to the spelling their
+manifests use, since --exact matches them case-sensitively.
+
+Consequence: em dashes, smart quotes and ellipses are not available in these
+files. Use '-', '"' and '...'. That is a small price for a class of bug that is
+invisible until it reaches a real Windows machine.
+
+## 2026-09-21 — Tool installs are decided by finding the executable, not by exit code
+The first real install died on Tailscale with "No package found matching input
+criteria" followed by "Tailscale installed but 'tailscale' is still not on
+PATH" — two misleading messages from one cause. `winget install --exact`
+matches the package id *case-sensitively*, so the manifest id
+`Tailscale.Tailscale` has to be spelled exactly that way; `tailscale.tailscale`
+matches nothing. The second message then fired because the code treated "winget
+returned" as "winget installed".
+
+Three changes. The id is spelled correctly. Whether a tool is present is now
+decided by `Resolve-Tool`, which looks on PATH and then in the standard Program
+Files locations, adding whatever it finds to this process's PATH — an installer
+writes PATH for *new* sessions, and an already-installed tool should be found
+rather than reinstalled. And success is judged by locating the executable
+afterwards rather than by `$LASTEXITCODE`, which reports failure for the benign
+"already installed, upgrade attempted" path.
+
+Tailscale also gets a direct-MSI fallback if winget produces nothing usable.
+That URL could not be reached from the build environment, so the fallback is
+wrapped in a try and reports why it failed rather than masking the original
+problem.
+
+Consequence: a missing tool now produces one accurate error naming the tool and
+saying the script is safe to re-run, instead of two contradictory ones.
+
+## 2026-09-21 — The Windows install bootstraps over HTTP, not git
+The first real run of the documented one-liner failed three ways at once, and
+all three were in the instructions rather than the installer. Windows checks
+the execution policy when it *loads* a `.ps1`, before it reads anything inside
+it, so `#Requires -RunAsAdministrator` never got the chance to print a useful
+message — the run died on "running scripts is disabled on this system". The
+documented `winget install Git.Git` reported "Installer failed with exit code:
+1" on a machine that already had Git, because winget treated it as an upgrade;
+the working Git was untouched, but the error reads like a fatal one. And the
+session wasn't elevated, which would have failed later at the scheduled task
+anyway.
+
+So: `scripts/bootstrap-windows.ps1` is piped into `Invoke-Expression`, which
+runs it from memory where the execution policy does not apply. It downloads a
+zip rather than cloning, removing the Git dependency and the upgrade failure
+with it. `setup-windows.ps1` dropped `#Requires` for an explicit administrator
+check that re-launches itself elevated. The Odds API key is now prompted for
+rather than passed as an argument — an empty `-OddsApiKey` was a parse error
+waiting to happen, and a key on the command line is visible in the process list
+to every user on the machine.
+
+Consequence: the install no longer depends on Git being present or on the user
+remembering to elevate, and the branch is pinned in a URL that has to be
+updated when this merges to main.
+
 ## 2026-09-18 — Reference price is a de-vigged sharp consensus, not a model
 We compare Polymarket to sportsbook consensus rather than predicting outcomes.
 A prediction model that beats Pinnacle is a research program; price
