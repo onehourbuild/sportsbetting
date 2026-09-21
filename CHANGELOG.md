@@ -1,6 +1,12 @@
 # CHANGELOG
 
 ## Unreleased — v1 build (2026-09-18)
+- Windows install fixed after its first real run: `scripts/bootstrap-windows.ps1` installs
+  from a zip over HTTP through `irm | iex` (no Git, no execution-policy wall),
+  `setup-windows.ps1` self-elevates instead of relying on `#Requires`, and the Odds API
+  key is prompted for rather than passed as a command-line argument. `docs/WINDOWS.md`
+  documents the three failures and how each is avoided.
+- `docs/HANDOFF.md`: the state a fresh session needs to pick the build back up.
 - Adjusted build prompt, spec, research notes, architecture contract.
 - Scaffold: pyproject/requirements/Makefile/Dockerfile/fly.toml/CI, Settings, db, models
   (all 8 tables), core types, transport (Http + Fixture), prefs service, templating

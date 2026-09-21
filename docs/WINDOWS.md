@@ -17,32 +17,50 @@ desktop is off, the phone shows the offline page.
 
 ## The short way: one command
 
-Open PowerShell **as Administrator** (right-click the Start button → *Terminal
-(Admin)*) and paste this:
+Open PowerShell — **it does not need to be the Administrator one**, the installer asks
+for elevation itself — and paste this single line:
 
 ```powershell
-winget install Git.Git --exact --silent --accept-package-agreements
-$d = "$env:TEMP\edge-setup"
-Remove-Item -Recurse -Force $d -ErrorAction SilentlyContinue
-git clone --branch claude/trusting-ramanujan-ht0xeg https://github.com/onehourbuild/sportsbetting $d
-& "$d\scripts\setup-windows.ps1"
+irm https://raw.githubusercontent.com/onehourbuild/sportsbetting/claude/trusting-ramanujan-ht0xeg/scripts/bootstrap-windows.ps1 | iex
 ```
 
-(The first line is a no-op if Git is already there. If PowerShell says `git` isn't
-recognised straight after it, close the window, open a new admin one, and paste the rest
-— a fresh install only reaches a new session's PATH.)
+Approve the User Account Control prompt when it appears. The install carries on in the
+window that opens, and **that** is the window that prints your URL and password at the
+end, so don't close it.
 
-That installs Git, Python 3.11 and Tailscale if they're missing, clones the app to
+It will ask you to paste your Odds API key. Enter on its own skips it, and the app falls
+back to the ESPN scoreboard — one soft source instead of a sharp consensus, so the
+edges are worth much less. Get a free key at [the-odds-api.com](https://the-odds-api.com)
+first if you don't have one.
+
+That installs Python 3.11 and Tailscale if they're missing, puts the app in
 `C:\apps\sportsbetting`, builds the virtualenv from the hashed lockfile, generates your
 password and secret key, writes `.env`, registers a scheduled task so it starts with the
 machine, disables sleep, starts it, waits until it answers, and publishes it on your
-tailnet. It prints your URL and password at the end. Re-running it is safe — it skips
-whatever is already done and never overwrites an existing `.env`.
+tailnet. Re-running it is safe — it skips whatever is already done and never overwrites
+an existing `.env`.
 
-Pass your Odds API key if you have one:
+### Why one line and not a clone
+
+Three things bite a first-time run, and the bootstrap exists to get around all of them:
+
+- **`running scripts is disabled on this system`.** Windows blocks downloaded `.ps1`
+  files by execution policy, and it checks that *before* it reads anything inside the
+  file. Piping into `iex` runs the bootstrap from memory, where the policy doesn't
+  apply, and it re-launches the installer with `-ExecutionPolicy Bypass`.
+- **`Installer failed with exit code: 1`** from `winget install Git.Git` on a machine
+  that already has Git. winget treats that as an *upgrade*, and a failed upgrade reports
+  an error even though your working Git is untouched. The bootstrap downloads a zip, so
+  Git is never needed.
+- **Forgetting to elevate.** Registering a scheduled task and changing the power plan
+  both need administrator rights. The installer now checks, and re-opens itself elevated
+  rather than failing halfway with a half-configured machine.
+
+If you'd rather run it from a clone you already have, that works too — just go through
+`powershell.exe` so the policy doesn't stop you:
 
 ```powershell
-& "$d\scripts\setup-windows.ps1" -OddsApiKey 'your-key'
+powershell -NoProfile -ExecutionPolicy Bypass -File "$env:TEMP\edge-setup\scripts\setup-windows.ps1"
 ```
 
 **Three things the script cannot do for you**, because they're your identity rather than
@@ -256,6 +274,19 @@ It refuses to run once you have logged a real bet, so it cannot eat your ledger.
 ---
 
 ## Troubleshooting
+
+**`running scripts is disabled on this system`.** The execution policy blocked the file.
+Use the one-line `irm ... | iex` command at the top, which runs from memory instead, or
+start the installer through `powershell -NoProfile -ExecutionPolicy Bypass -File "..."`.
+Don't change the machine-wide policy to work around this.
+
+**`Installer failed with exit code: 1` from winget installing Git.** Git was already
+installed and winget tried to upgrade it. The upgrade failed; your existing Git is fine.
+Nothing to fix — and the current bootstrap doesn't need Git at all.
+
+**The installer window closed before you could read the password.** It's in
+`C:\apps\sportsbetting\.env` as `APP_PASSWORD`. Open it with
+`notepad C:\apps\sportsbetting\.env`.
 
 **"Add to Home Screen" isn't in the Share sheet.** You're not in Safari, or HTTPS
 certificates aren't enabled in the Tailscale admin console, so you're on a cert iOS

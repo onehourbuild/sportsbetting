@@ -2,6 +2,31 @@
 
 Each entry: date, decision, why, consequences.
 
+## 2026-09-21 — The Windows install bootstraps over HTTP, not git
+The first real run of the documented one-liner failed three ways at once, and
+all three were in the instructions rather than the installer. Windows checks
+the execution policy when it *loads* a `.ps1`, before it reads anything inside
+it, so `#Requires -RunAsAdministrator` never got the chance to print a useful
+message — the run died on "running scripts is disabled on this system". The
+documented `winget install Git.Git` reported "Installer failed with exit code:
+1" on a machine that already had Git, because winget treated it as an upgrade;
+the working Git was untouched, but the error reads like a fatal one. And the
+session wasn't elevated, which would have failed later at the scheduled task
+anyway.
+
+So: `scripts/bootstrap-windows.ps1` is piped into `Invoke-Expression`, which
+runs it from memory where the execution policy does not apply. It downloads a
+zip rather than cloning, removing the Git dependency and the upgrade failure
+with it. `setup-windows.ps1` dropped `#Requires` for an explicit administrator
+check that re-launches itself elevated. The Odds API key is now prompted for
+rather than passed as an argument — an empty `-OddsApiKey` was a parse error
+waiting to happen, and a key on the command line is visible in the process list
+to every user on the machine.
+
+Consequence: the install no longer depends on Git being present or on the user
+remembering to elevate, and the branch is pinned in a URL that has to be
+updated when this merges to main.
+
 ## 2026-09-18 — Reference price is a de-vigged sharp consensus, not a model
 We compare Polymarket to sportsbook consensus rather than predicting outcomes.
 A prediction model that beats Pinnacle is a research program; price

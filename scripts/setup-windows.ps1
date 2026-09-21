@@ -1,4 +1,3 @@
-#Requires -RunAsAdministrator
 <#
 .SYNOPSIS
   One-shot install of Edge Finder on a Windows desktop, reachable from your phone.
@@ -48,6 +47,35 @@ param(
 $ErrorActionPreference = 'Stop'
 $RepoUrl  = 'https://github.com/onehourbuild/sportsbetting'
 $TaskName = 'EdgeFinder'
+
+# Windows checks the execution policy when it loads a .ps1, which happens before it reads
+# #Requires — so a #Requires -RunAsAdministrator here would never get to print anything
+# useful on a default machine. Registering a scheduled task and changing the power plan
+# both need administrator rights, so ask for them now rather than failing halfway through
+# with a permission error and a half-configured machine.
+#
+# The key is deliberately not forwarded to the elevated window: arguments are visible in
+# the process list to every user on the machine. The elevated run prompts for it instead.
+$principalCheck = New-Object Security.Principal.WindowsPrincipal(
+    [Security.Principal.WindowsIdentity]::GetCurrent())
+if (-not $principalCheck.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Write-Host 'This needs administrator rights. Opening an elevated window ...' -ForegroundColor Yellow
+    $relaunch = @(
+        '-NoExit', '-NoProfile', '-ExecutionPolicy', 'Bypass',
+        '-File', ('"{0}"' -f $PSCommandPath),
+        '-InstallDir', ('"{0}"' -f $InstallDir),
+        '-Branch', ('"{0}"' -f $Branch),
+        '-Port', $Port
+    )
+    try {
+        Start-Process -FilePath 'powershell.exe' -Verb RunAs -ArgumentList $relaunch
+    } catch {
+        throw ('Could not elevate. Right-click Windows PowerShell, choose "Run as ' +
+               'administrator", and run this script again.')
+    }
+    Write-Host 'Carry on in the new window; this one is done.' -ForegroundColor Yellow
+    return
+}
 
 function Write-Step { param([string] $Message) Write-Host "`n==> $Message" -ForegroundColor Cyan }
 function Write-Note { param([string] $Message) Write-Host "    $Message" -ForegroundColor DarkGray }
@@ -179,6 +207,16 @@ Write-Win 'Dependencies installed from the hashed lockfile.'
 Write-Step 'Configuring'
 $envPath = [System.IO.Path]::Combine($InstallDir, '.env')
 $passphrase = $null
+
+# Without a key the app falls back to the ESPN scoreboard, which is one soft source rather
+# than a sharp consensus — the edges it produces are worth much less. Worth one prompt.
+$keyAlreadyStored = (Test-Path $envPath) -and
+    (Select-String -Path $envPath -Pattern '^ODDS_API_KEY=.+' -Quiet)
+if (-not $OddsApiKey -and -not $keyAlreadyStored) {
+    Write-Note 'Paste your key from https://the-odds-api.com (free, 500 credits a month).'
+    Write-Note 'Enter on its own skips it; you can add ODDS_API_KEY to .env later.'
+    $OddsApiKey = (Read-Host '    Odds API key').Trim()
+}
 if (Test-Path $envPath) {
     Write-Note '.env already exists — leaving it exactly as it is.'
 } else {
@@ -207,9 +245,9 @@ LOG_LEVEL=INFO
     Write-TextNoBom -Path $envPath -Text $settings
     Write-Win 'Wrote .env with a generated password and secret key.'
 }
-if (-not $OddsApiKey -and -not (Select-String -Path $envPath -Pattern '^ODDS_API_KEY=.+' -Quiet)) {
-    Write-Note 'No Odds API key set. The app will fall back to the ESPN scoreboard (one soft'
-    Write-Note 'source). Get a free key at https://the-odds-api.com and put it in .env later.'
+if (-not $OddsApiKey -and -not $keyAlreadyStored) {
+    Write-Note 'Running without an Odds API key: fair value will come from the ESPN'
+    Write-Note 'scoreboard alone. Add ODDS_API_KEY to .env and restart to fix that.'
 }
 
 # ----------------------------------------------------------------------------- service
