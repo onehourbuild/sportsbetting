@@ -92,19 +92,89 @@ function Update-PathFromRegistry {
 
 function Test-Command { param([string] $Name) [bool] (Get-Command $Name -ErrorAction SilentlyContinue) }
 
+function Join-ToolPath {
+    param([string] $Root, [string[]] $Parts)
+    if (-not $Root) { return $null }   # ProgramFiles(x86) is absent on some installs
+    $path = $Root
+    foreach ($part in $Parts) { $path = [System.IO.Path]::Combine($path, $part) }
+    return $path
+}
+
+# Where these land when their installer does not put them on this process's PATH — which
+# is most of the time, because a PATH written by an installer only reaches a NEW session.
+# Checking here first also means an existing install is found rather than reinstalled.
+$KnownToolPaths = @{
+    'tailscale' = @(
+        (Join-ToolPath $env:ProgramFiles        @('Tailscale', 'tailscale.exe')),
+        (Join-ToolPath ${env:ProgramFiles(x86)} @('Tailscale', 'tailscale.exe'))
+    )
+    'git' = @(
+        (Join-ToolPath $env:ProgramFiles        @('Git', 'cmd', 'git.exe')),
+        (Join-ToolPath ${env:ProgramFiles(x86)} @('Git', 'cmd', 'git.exe'))
+    )
+    'python' = @(
+        (Join-ToolPath $env:LOCALAPPDATA @('Programs', 'Python', 'Python311', 'python.exe')),
+        (Join-ToolPath $env:ProgramFiles @('Python311', 'python.exe'))
+    )
+}
+
+# Look on PATH, then in the known locations. Finding it off-PATH also puts its folder on
+# this process's PATH, so the plain-name calls further down this script keep working.
+function Resolve-Tool {
+    param([string] $Name)
+    $onPath = Get-Command $Name -ErrorAction SilentlyContinue
+    if ($onPath) { return $onPath.Source }
+    foreach ($candidate in @($KnownToolPaths[$Name])) {
+        if ($candidate -and (Test-Path $candidate)) {
+            $dir = Split-Path -Parent $candidate
+            if (($env:Path -split ';') -notcontains $dir) { $env:Path = "$dir;$env:Path" }
+            return $candidate
+        }
+    }
+    return $null
+}
+
+$InstallTailscaleMsi = {
+    $msi = [System.IO.Path]::Combine($env:TEMP, 'tailscale-setup.msi')
+    $url = 'https://pkgs.tailscale.com/stable/tailscale-setup-latest-amd64.msi'
+    Invoke-WebRequest -Uri $url -OutFile $msi -UseBasicParsing
+    Start-Process -FilePath 'msiexec.exe' `
+        -ArgumentList '/i', ('"{0}"' -f $msi), '/quiet', '/norestart' -Wait
+}
+
 function Install-IfMissing {
-    param([string] $Command, [string] $WingetId, [string] $Label)
-    if (Test-Command $Command) {
+    param(
+        [string] $Command,
+        [string] $WingetId,
+        [string] $Label,
+        [scriptblock] $Fallback
+    )
+    if (Resolve-Tool $Command) {
         Write-Note "$Label already installed."
         return
     }
+
     Write-Note "Installing $Label ..."
-    & winget install --id $WingetId --exact --silent --accept-source-agreements --accept-package-agreements
+    # --exact makes winget match the id case-sensitively, so it has to be spelled exactly
+    # as the manifest spells it: 'tailscale.tailscale' returns "No package found matching
+    # input criteria" while 'Tailscale.Tailscale' installs. Exit codes are not a reliable
+    # signal either — an upgrade of an already-present package reports failure — so
+    # success is decided by finding the executable afterwards, not by $LASTEXITCODE.
+    $output = & winget install --id $WingetId --exact --silent `
+        --accept-source-agreements --accept-package-agreements 2>&1 | Out-String
+    if ($output.Trim()) { Write-Note $output.Trim() }
     Update-PathFromRegistry
-    if (-not (Test-Command $Command)) {
-        throw "$Label installed but '$Command' is still not on PATH. Open a new admin PowerShell and re-run this script."
+    if (Resolve-Tool $Command) { Write-Win "$Label installed."; return }
+
+    if ($Fallback) {
+        Write-Note "winget did not produce a working $Label. Downloading the installer directly ..."
+        try { & $Fallback } catch { Write-Note "Direct download failed: $($_.Exception.Message)" }
+        Update-PathFromRegistry
+        if (Resolve-Tool $Command) { Write-Win "$Label installed."; return }
     }
-    Write-Win "$Label installed."
+
+    throw ("Could not install $Label. Install it by hand and re-run this script — it " +
+           "skips every step that is already done, so nothing is lost.")
 }
 
 # A passphrase you can actually type on a phone keyboard beats 16 random characters that
@@ -187,9 +257,10 @@ if (-not (Test-Command 'winget')) {
 }
 Write-Note "Installing to $InstallDir"
 
-Install-IfMissing -Command 'git'       -WingetId 'Git.Git'              -Label 'Git'
-Install-IfMissing -Command 'python'    -WingetId 'Python.Python.3.11'   -Label 'Python 3.11'
-Install-IfMissing -Command 'tailscale' -WingetId 'tailscale.tailscale'  -Label 'Tailscale'
+Install-IfMissing -Command 'git'       -WingetId 'Git.Git'             -Label 'Git'
+Install-IfMissing -Command 'python'    -WingetId 'Python.Python.3.11'  -Label 'Python 3.11'
+Install-IfMissing -Command 'tailscale' -WingetId 'Tailscale.Tailscale' -Label 'Tailscale' `
+    -Fallback $InstallTailscaleMsi
 
 # ----------------------------------------------------------------------------- the code
 

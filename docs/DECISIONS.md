@@ -2,6 +2,31 @@
 
 Each entry: date, decision, why, consequences.
 
+## 2026-09-21 — Tool installs are decided by finding the executable, not by exit code
+The first real install died on Tailscale with "No package found matching input
+criteria" followed by "Tailscale installed but 'tailscale' is still not on
+PATH" — two misleading messages from one cause. `winget install --exact`
+matches the package id *case-sensitively*, so the manifest id
+`Tailscale.Tailscale` has to be spelled exactly that way; `tailscale.tailscale`
+matches nothing. The second message then fired because the code treated "winget
+returned" as "winget installed".
+
+Three changes. The id is spelled correctly. Whether a tool is present is now
+decided by `Resolve-Tool`, which looks on PATH and then in the standard Program
+Files locations, adding whatever it finds to this process's PATH — an installer
+writes PATH for *new* sessions, and an already-installed tool should be found
+rather than reinstalled. And success is judged by locating the executable
+afterwards rather than by `$LASTEXITCODE`, which reports failure for the benign
+"already installed, upgrade attempted" path.
+
+Tailscale also gets a direct-MSI fallback if winget produces nothing usable.
+That URL could not be reached from the build environment, so the fallback is
+wrapped in a try and reports why it failed rather than masking the original
+problem.
+
+Consequence: a missing tool now produces one accurate error naming the tool and
+saying the script is safe to re-run, instead of two contradictory ones.
+
 ## 2026-09-21 — The Windows install bootstraps over HTTP, not git
 The first real run of the documented one-liner failed three ways at once, and
 all three were in the instructions rather than the installer. Windows checks

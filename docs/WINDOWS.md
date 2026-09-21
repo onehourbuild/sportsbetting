@@ -280,6 +280,15 @@ Use the one-line `irm ... | iex` command at the top, which runs from memory inst
 start the installer through `powershell -NoProfile -ExecutionPolicy Bypass -File "..."`.
 Don't change the machine-wide policy to work around this.
 
+**`No package found matching input criteria`.** A winget package id spelled with the
+wrong capitalisation. `--exact` matches ids case-sensitively, so `tailscale.tailscale`
+finds nothing while `Tailscale.Tailscale` installs. Fixed in the installer; if you see it
+for some other package, check the id's capitalisation against `winget search <name>`.
+
+**`X installed but 'x' is still not on PATH`.** An installer wrote PATH for *new*
+sessions, so the running one cannot see it. The installer now looks in the standard
+Program Files locations as well as on PATH, and adds what it finds to its own PATH.
+
 **`Installer failed with exit code: 1` from winget installing Git.** Git was already
 installed and winget tried to upgrade it. The upgrade failed; your existing Git is fine.
 Nothing to fix — and the current bootstrap doesn't need Git at all.

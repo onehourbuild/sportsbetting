@@ -1,6 +1,9 @@
 # CHANGELOG
 
 ## Unreleased — v1 build (2026-09-18)
+- Windows tool installs: corrected the case-sensitive winget id for Tailscale, find tools
+  that are installed but off PATH, decide success by locating the executable rather than
+  by winget's exit code, and fall back to the Tailscale MSI.
 - Windows install fixed after its first real run: `scripts/bootstrap-windows.ps1` installs
   from a zip over HTTP through `irm | iex` (no Git, no execution-policy wall),
   `setup-windows.ps1` self-elevates instead of relying on `#Requires`, and the Odds API
