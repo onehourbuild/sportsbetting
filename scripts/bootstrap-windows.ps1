@@ -96,14 +96,14 @@ $arguments = @(
 )
 
 if ($isAdmin) {
-    # Already elevated: run it here, in the window the user is watching. No -NoExit —
+    # Already elevated: run it here, in the window the user is watching. No -NoExit -
     # this window was already open and stays open on its own.
     & powershell.exe @arguments
 } else {
     # A new elevated window replaces this one, so it has to stay open afterwards or the
     # URL and password scroll past and vanish with it.
     $arguments = @('-NoExit') + $arguments
-    Write-Host '    Asking for administrator rights — approve the prompt.' -ForegroundColor Yellow
+    Write-Host '    Asking for administrator rights - approve the prompt.' -ForegroundColor Yellow
     Write-Host '    The install continues in the window that opens.' -ForegroundColor Yellow
     Start-Process -FilePath 'powershell.exe' -Verb RunAs -ArgumentList $arguments
 }

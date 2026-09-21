@@ -1,6 +1,9 @@
 # CHANGELOG
 
 ## Unreleased — v1 build (2026-09-18)
+- Windows scripts are ASCII-only, enforced by tests/test_windows_scripts.py: PowerShell
+  5.1 reads a .ps1 as Windows-1252, so a UTF-8 em dash in a comment broke the parse before
+  the first line ran. The same test pins the winget ids to their manifest spelling.
 - Windows tool installs: corrected the case-sensitive winget id for Tailscale, find tools
   that are installed but off PATH, decide success by locating the executable rather than
   by winget's exit code, and fall back to the Tailscale MSI.

@@ -24,7 +24,7 @@
   Branch to check out. Defaults to the PR branch until it is merged to main.
 
 .PARAMETER OddsApiKey
-  Your key from the-odds-api.com. Optional — without it the app falls back to the ESPN
+  Your key from the-odds-api.com. Optional - without it the app falls back to the ESPN
   scoreboard, which is one soft source rather than a sharp consensus.
 
 .PARAMETER Port
@@ -49,7 +49,7 @@ $RepoUrl  = 'https://github.com/onehourbuild/sportsbetting'
 $TaskName = 'EdgeFinder'
 
 # Windows checks the execution policy when it loads a .ps1, which happens before it reads
-# #Requires — so a #Requires -RunAsAdministrator here would never get to print anything
+# #Requires - so a #Requires -RunAsAdministrator here would never get to print anything
 # useful on a default machine. Registering a scheduled task and changing the power plan
 # both need administrator rights, so ask for them now rather than failing halfway through
 # with a permission error and a half-configured machine.
@@ -100,7 +100,7 @@ function Join-ToolPath {
     return $path
 }
 
-# Where these land when their installer does not put them on this process's PATH — which
+# Where these land when their installer does not put them on this process's PATH - which
 # is most of the time, because a PATH written by an installer only reaches a NEW session.
 # Checking here first also means an existing install is found rather than reinstalled.
 $KnownToolPaths = @{
@@ -158,7 +158,7 @@ function Install-IfMissing {
     # --exact makes winget match the id case-sensitively, so it has to be spelled exactly
     # as the manifest spells it: 'tailscale.tailscale' returns "No package found matching
     # input criteria" while 'Tailscale.Tailscale' installs. Exit codes are not a reliable
-    # signal either — an upgrade of an already-present package reports failure — so
+    # signal either - an upgrade of an already-present package reports failure - so
     # success is decided by finding the executable afterwards, not by $LASTEXITCODE.
     $output = & winget install --id $WingetId --exact --silent `
         --accept-source-agreements --accept-package-agreements 2>&1 | Out-String
@@ -173,7 +173,7 @@ function Install-IfMissing {
         if (Resolve-Tool $Command) { Write-Win "$Label installed."; return }
     }
 
-    throw ("Could not install $Label. Install it by hand and re-run this script — it " +
+    throw ("Could not install $Label. Install it by hand and re-run this script - it " +
            "skips every step that is already done, so nothing is lost.")
 }
 
@@ -211,7 +211,7 @@ function New-HexKey {
 }
 
 # PowerShell 5.1's Out-File -Encoding utf8 writes a byte-order mark, and a BOM in front of
-# the first key makes pydantic read "\ufeffAPP_ENV" instead of "APP_ENV" — the app then
+# the first key makes pydantic read "\ufeffAPP_ENV" instead of "APP_ENV" - the app then
 # starts in dev with no password. Always write .env BOM-free.
 function Write-TextNoBom {
     param([string] $Path, [string] $Text)
@@ -294,7 +294,7 @@ Write-Win 'Dependencies installed from the hashed lockfile.'
 Write-Step 'Configuring'
 $passphrase = $null
 if (Test-Path $envPath) {
-    Write-Note '.env already exists — leaving it exactly as it is.'
+    Write-Note '.env already exists - leaving it exactly as it is.'
 } else {
     $passphrase = New-Passphrase
     $dbPath = [System.IO.Path]::Combine($InstallDir, 'data', 'app.db') -replace '\\', '/'
@@ -371,7 +371,7 @@ Write-Win "App is answering on 127.0.0.1:$Port."
 Write-Step 'Publishing it on your tailnet'
 $tsStatus = & tailscale status --json 2>$null | ConvertFrom-Json
 if (-not $tsStatus -or $tsStatus.BackendState -ne 'Running') {
-    Write-Note 'Signing in to Tailscale — a browser window will open. Use the same account'
+    Write-Note 'Signing in to Tailscale - a browser window will open. Use the same account'
     Write-Note 'you will sign in with on your phone.'
     & tailscale up
     $tsStatus = & tailscale status --json 2>$null | ConvertFrom-Json

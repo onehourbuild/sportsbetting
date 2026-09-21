@@ -5,7 +5,7 @@
 .DESCRIPTION
   Point a Task Scheduler task at this script to have the app come up with the machine.
   It resolves the repo root from its own location, so it does not care what the task's
-  working directory is — the commonest reason a scheduled task works by hand and fails
+  working directory is - the commonest reason a scheduled task works by hand and fails
   at boot.
 
   Settings come from .env in the repo root (see docs/WINDOWS.md). Nothing is passed on

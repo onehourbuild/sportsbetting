@@ -2,6 +2,29 @@
 
 Each entry: date, decision, why, consequences.
 
+## 2026-09-21 - The Windows scripts are ASCII-only, enforced by a test
+An em dash in a comment killed the installer before its first line ran. Windows
+PowerShell 5.1 - the one every Windows machine ships with, and the one the
+installer actually runs under - reads a .ps1 as Windows-1252 unless the file
+carries a UTF-8 BOM. A UTF-8 em dash (E2 80 94) therefore arrives as three
+mojibake characters, one of which reads as a quote and closes the string it is
+sitting in. The result is a parse error, pointing at a line that looks perfectly
+fine in any editor.
+
+The parse checks run here never caught it because PowerShell 7 defaults to
+UTF-8, so the file parsed cleanly in exactly the place it was being checked and
+broke in exactly the place it was being used.
+
+Adding a BOM would fix the reading, but a BOM is echoed as garbage from a .bat
+and makes for noisy diffs. So the scripts are plain ASCII instead, and
+tests/test_windows_scripts.py enforces it in CI, naming the file, line and
+codepoint on failure. The same test pins the winget ids to the spelling their
+manifests use, since --exact matches them case-sensitively.
+
+Consequence: em dashes, smart quotes and ellipses are not available in these
+files. Use '-', '"' and '...'. That is a small price for a class of bug that is
+invisible until it reaches a real Windows machine.
+
 ## 2026-09-21 — Tool installs are decided by finding the executable, not by exit code
 The first real install died on Tailscale with "No package found matching input
 criteria" followed by "Tailscale installed but 'tailscale' is still not on
