@@ -273,6 +273,24 @@ It refuses to run once you have logged a real bet, so it cannot eat your ledger.
 
 ---
 
+## Changing your password later
+
+The installer never overwrites an existing `.env`, so re-running it will not change a
+password you already have. Change it by hand:
+
+```powershell
+notepad C:\apps\sportsbetting\.env
+```
+
+Edit the `APP_PASSWORD=` line (at least 12 characters, or the app refuses to start), save,
+then restart it from an **administrator** PowerShell:
+
+```powershell
+Restart-ScheduledTask -TaskName EdgeFinder
+```
+
+Your phone will ask you to log in again.
+
 ## Troubleshooting
 
 **Start here: ask the machine what is wrong.** One line, read-only, changes nothing:

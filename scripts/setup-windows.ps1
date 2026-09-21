@@ -41,6 +41,7 @@ param(
     [string] $InstallDir = 'C:\apps\sportsbetting',
     [string] $Branch     = 'claude/trusting-ramanujan-ht0xeg',
     [string] $OddsApiKey = '',
+    [string] $ChosenPassword = '',
     [int]    $Port       = 8000
 )
 
@@ -178,8 +179,8 @@ function Install-IfMissing {
 }
 
 # A passphrase you can actually type on a phone keyboard beats 16 random characters that
-# you will get wrong twice in a bar. Four words from this list clear the 12-character
-# minimum with room to spare.
+# you will get wrong twice in a bar. Two words plus three digits clears the app's
+# 12-character minimum without being a sentence to thumb in one-handed.
 $Words = @(
     'amber','anchor','apple','arrow','autumn','bamboo','beacon','birch','bishop','bramble',
     'cactus','canyon','cedar','cobalt','copper','coral','cotton','crimson','crystal','dahlia',
@@ -195,12 +196,21 @@ $Words = @(
 
 function New-Passphrase {
     $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
-    $picked = for ($i = 0; $i -lt 4; $i++) {
+    $pick = {
         $bytes = New-Object byte[] 4
         $rng.GetBytes($bytes)
-        $Words[[BitConverter]::ToUInt32($bytes, 0) % $Words.Count]
+        [BitConverter]::ToUInt32($bytes, 0)
     }
-    $picked -join '-'
+    $first  = $Words[(& $pick) % $Words.Count]
+    $second = $Words[(& $pick) % $Words.Count]
+    $digits = (& $pick) % 1000
+    $candidate = '{0}-{1}{2:D3}' -f $first, $second, $digits
+    # Two short words could land under the minimum; pad rather than hand back something
+    # the app will refuse at startup.
+    while ($candidate.Length -lt 12) {
+        $candidate = '{0}-{1}' -f $candidate, $Words[(& $pick) % $Words.Count]
+    }
+    $candidate
 }
 
 function New-HexKey {
@@ -251,6 +261,20 @@ if (-not $OddsApiKey -and -not $keyAlreadyStored) {
     if ($OddsApiKey) { Write-Win 'Key captured.' }
 }
 
+if (-not $keyAlreadyStored -and -not (Test-Path $envPath)) {
+    Write-Step 'Choose your app password'
+    Write-Note 'This is what you type on your phone to open the app, so pick something'
+    Write-Note 'you can actually thumb in. At least 12 characters.'
+    Write-Note ''
+    Write-Note 'Press Enter on its own and one will be generated for you.'
+    while ($true) {
+        $chosen = (Read-Host '    Password').Trim()
+        if (-not $chosen) { break }
+        if ($chosen.Length -ge 12) { $ChosenPassword = $chosen; Write-Win 'Password set.'; break }
+        Write-Note "That is $($chosen.Length) characters; the app requires at least 12."
+    }
+}
+
 Write-Step 'Checking prerequisites'
 if (-not (Test-Command 'winget')) {
     throw 'winget is missing. Install "App Installer" from the Microsoft Store, then re-run this script.'
@@ -296,7 +320,7 @@ $passphrase = $null
 if (Test-Path $envPath) {
     Write-Note '.env already exists - leaving it exactly as it is.'
 } else {
-    $passphrase = New-Passphrase
+    $passphrase = if ($ChosenPassword) { $ChosenPassword } else { New-Passphrase }
     $dbPath = [System.IO.Path]::Combine($InstallDir, 'data', 'app.db') -replace '\\', '/'
     $settings = @"
 # Written by scripts/setup-windows.ps1. See .env.example for every option.
