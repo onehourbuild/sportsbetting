@@ -251,3 +251,33 @@ responses, and they supersede the matching "Unverified" entries.
   `GET /markets/{ticker}/orderbook?depth=5` gives `orderbook_fp.yes_dollars` /
   `no_dollars` as `[price, size]` pairs. `close_time` is not kickoff (three days after).
 
+## Verified live 2026-09-21 (Polymarket US is a separate exchange)
+
+Polymarket ships two products and the app only knows about one of them.
+
+- **polymarket.com** blocks US residents from trading and shows an interstitial pointing
+  at polymarket.us. Identity there is an on-chain proxy wallet; fills are public on
+  `data-api.polymarket.com/trades?user=<wallet>`.
+- **polymarket.us** is the US-regulated exchange. There is **no wallet**: accounts hold
+  cash, and programmatic access is by API key. A .us profile page contains no `0x`
+  address at all.
+- Public .us market data is **keyless**: `https://gateway.polymarket.us/v1/events?limit=`,
+  `/v1/events/slug/<slug>`, `/v1/markets?limit=`, `/v1/search?q=`. Slugs look like
+  `nfl-nyg-lar-2026-09-21` (event) and `asc-nfl-nyg-lar-2026-09-21-pos-6pt5` (market).
+  An event embeds its markets with `outcomes`, `outcomePrices`, `bestBidQuote`,
+  `bestAskQuote`, `feeCoefficient`, `orderPriceMinTickSize`, `minimumTradeQty`,
+  `gameStartTime`, `status` and `sportsMarketType`. One NFL game carried 814 markets.
+- **The .us taker fee coefficient is 0.0695**, on all 814 markets of the game checked,
+  against 0.05 on .com. `prefs.taker_fee_rate` defaults to the .com value.
+- Authenticated .us API (`https://api.polymarket.us`) needs headers `X-PM-Access-Key`,
+  `X-PM-Timestamp` (ms, within 30s of server time) and `X-PM-Signature` (base64 Ed25519
+  over `timestamp + method + path`). `GET /v1/portfolio/activities` returns trades with
+  `marketSlug`, `createTime`, `price`, `qty`, `costBasis`, `realizedPnl` and
+  `isAggressor` (maker vs taker), paged by `nextCursor` / `eof`; filter with
+  `types=ACTIVITY_TYPE_TRADE`. Keys are created by the account holder at
+  `polymarket.us/developer` after identity verification and shown once.
+- Caution: .us outcome labels contradict each other. The market titled "Los Angeles Rams
+  wins by over 6.5 points" has `question` "Will the New York Giants cover 6.5…" and
+  `outcomes` `["-6.50","+6.50"]`. Resolve the side by price against a known reference,
+  not by the sign in the label.
+

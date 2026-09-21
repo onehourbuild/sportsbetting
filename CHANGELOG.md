@@ -2,6 +2,14 @@
 
 ## Unreleased — v1 build (2026-09-18)
 
+### Polymarket US found (2026-09-21)
+- `docs/STATUS-2026-09-21.md`: the owner's funded account is on **polymarket.us**, a
+  separate US-regulated exchange with no wallets, so the wallet importer cannot see their
+  bets; the .us taker fee coefficient is **0.0695** against the 0.05 the app assumes; and
+  .us market identity is a `marketSlug`, not a condition id. The two venues price the same
+  game the same, so the prices are fine and the fee and the ledger are not. Includes the
+  verified spec for a key-based .us importer and the keyless .us market API.
+
 ### Wallet import (2026-09-20)
 - **Your Polymarket fills become ledger rows** (`app/services/wallet_import.py`). Set your
   proxy wallet address under Settings, Polymarket wallet, and every scan reads data-api
