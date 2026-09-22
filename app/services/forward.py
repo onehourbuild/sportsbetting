@@ -28,6 +28,8 @@ from app.models import ForwardSample
 
 log = logging.getLogger(__name__)
 
+_EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
+
 # A market resolves some time after kickoff; do not go looking for a result before then.
 SETTLE_AFTER_START = timedelta(hours=3)
 # Cap the per-scan settlement fetches: each is one GET /markets/{id}.
@@ -52,6 +54,22 @@ def _top_ask_usd(book: OrderBook) -> float | None:
     return round(sum(lvl.price * lvl.size for lvl in book.asks if lvl.price <= best + 1e-12), 2)
 
 
+def _one_bet_per_token(rows: Sequence[ForwardSample], threshold: float) -> list[ForwardSample]:
+    """One bet per outcome: the first scan at which it cleared `threshold`.
+
+    The scan runs hourly, so an outcome that stays priceable for half a day is recorded a
+    dozen times, and one game can leave a dozen near-identical rows. Counting those as a
+    dozen bets is how this report claimed "+47% on 13 bets" off a single winner seen
+    eleven times. A bettor buys once, at the first price that cleared the bar, so that is
+    the row kept and everything after it is the same position, not a new one.
+    """
+    first: dict[str, ForwardSample] = {}
+    for row in sorted(rows, key=lambda r: (_as_utc(r.sampled_at) or _EPOCH, r.id or 0)):
+        if row.edge >= threshold:
+            first.setdefault(row.token, row)
+    return list(first.values())
+
+
 def record_sample(
     session: Session,
     *,
@@ -62,6 +80,7 @@ def record_sample(
     fair: FairProb,
     prefs_fee_rate: float,
     now: datetime,
+    prefs_use_market_fee: bool = True,
 ) -> ForwardSample | None:
     """Write one sample, or None when the outcome is not a priceable pre-game bet.
 
@@ -84,7 +103,11 @@ def record_sample(
         return None
 
     outcome = market.outcomes[outcome_index]
-    fee_rate = market.taker_fee_rate if market.taker_fee_rate is not None else prefs_fee_rate
+    fee_rate = (
+        market.taker_fee_rate
+        if (market.taker_fee_rate is not None and prefs_use_market_fee)
+        else prefs_fee_rate
+    )
     cost = effective_price(ask, fee_rate)
     hours = None if start is None else round((start - _as_utc(now)).total_seconds() / 3600.0, 3)
 
@@ -214,7 +237,7 @@ def report(
 
     buckets = []
     for threshold in thresholds:
-        taken = [row for row in graded if row.edge >= threshold]
+        taken = _one_bet_per_token(graded, threshold)
         n = len(taken)
         wins = sum(1 for row in taken if row.won)
         pnls = [row.pnl_per_dollar for row in taken if row.pnl_per_dollar is not None]
@@ -232,6 +255,7 @@ def report(
         )
     return {
         "graded": len(graded),
+        "outcomes": len({row.token for row in graded}),
         "pending": int(pending or 0),
         "league": league or "all",
         "buckets": buckets,
@@ -243,8 +267,8 @@ def format_report(data: dict) -> str:
     lines = [
         # ASCII only: this prints to a Windows console using cp1252, where an em dash
         # comes out as a replacement character.
-        f"Forward test - {data['graded']} graded sample(s), {data['pending']} pending "
-        f"({data['league']})",
+        f"Forward test - {data['outcomes']} graded outcome(s) from {data['graded']} "
+        f"sample(s), {data['pending']} pending ({data['league']})",
     ]
     if not data["graded"]:
         lines.append("")
@@ -263,6 +287,8 @@ def format_report(data: dict) -> str:
         )
     lines.append("")
     lines.append("ROI/$ is profit per dollar staked, net of the Polymarket taker fee.")
+    lines.append("One bet per outcome, taken at the first scan that cleared the threshold:")
+    lines.append("the hourly scan re-records the same outcome, and those are not new bets.")
     lines.append("Treat anything under a few hundred bets as noise, not a result.")
     return "\n".join(lines)
 

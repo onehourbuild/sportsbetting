@@ -1,6 +1,6 @@
 """The forward test: recording every priced outcome, grading it, reporting on it.
 
-The behaviour that matters here and is NOT covered by test_edge.py is the negative case —
+The behavior that matters here and is NOT covered by test_edge.py is the negative case —
 `edge.build_opportunity` returns None below `min_edge`, and `forward.record_sample`
 deliberately does not. A live slate produced nothing but negative edges, so a recorder
 that inherited the threshold would record nothing at all and the forward test would be
@@ -277,6 +277,67 @@ def test_format_report_says_so_when_nothing_is_graded(db_session: Session) -> No
     assert "Nothing graded yet" in text
 
 
+def _repeat(session: Session, scan_id: int, token: str, *, edge: float, won: bool,
+            ask: float, at) -> None:
+    session.add(
+        ForwardSample(
+            scan_id=scan_id,
+            market_id="500001",
+            token=token,
+            outcome_index=0,
+            outcome_name="Chiefs",
+            league="nfl",
+            market_type="moneyline",
+            ask=ask,
+            effective_price=ask,
+            fee_rate=0.0,
+            fair_prob=ask + edge,
+            edge=edge,
+            sampled_at=at,
+            won=won,
+            pnl_per_dollar=((1 - ask) / ask) if won else -1.0,
+        )
+    )
+
+
+def test_repeat_scans_of_one_outcome_count_as_one_bet(db_session: Session) -> None:
+    """The scan runs hourly, so one outcome that stays priceable all day leaves a dozen
+    near-identical rows. Live data had one winner recorded eleven times, which the report
+    read as eleven winning bets and published as "+47% ROI on 13 bets"."""
+    scan_id = seed_rows(db_session)
+    for i in range(11):
+        _repeat(db_session, scan_id, "same-token", edge=0.02, won=True, ask=0.62,
+                at=NOW + timedelta(hours=i))
+    _graded(db_session, scan_id, edge=0.02, won=False)  # a genuinely separate outcome
+    db_session.flush()
+
+    data = forward.report(db_session, thresholds=(0.0,))
+    assert data["graded"] == 12  # rows stored
+    assert data["outcomes"] == 2  # distinct outcomes behind them
+    bucket = data["buckets"][0]
+    assert bucket["n"] == 2 and bucket["wins"] == 1
+    assert bucket["win_rate"] == pytest.approx(0.5)
+
+
+def test_the_bet_is_the_first_scan_that_cleared_the_threshold(db_session: Session) -> None:
+    """Which copy is kept is not arbitrary: you buy the first time the edge shows up, so a
+    later, bigger edge on the same outcome must not re-price the bet you already made."""
+    scan_id = seed_rows(db_session)
+    _repeat(db_session, scan_id, "tok", edge=0.01, won=True, ask=0.80, at=NOW)
+    _repeat(db_session, scan_id, "tok", edge=0.05, won=True, ask=0.40,
+            at=NOW + timedelta(hours=1))
+    db_session.flush()
+
+    data = forward.report(db_session, thresholds=(0.0, 0.03))
+    by_threshold = {b["threshold"]: b for b in data["buckets"]}
+    # from 0%: the 80c row came first, so that is the position
+    assert by_threshold[0.0]["n"] == 1
+    assert by_threshold[0.0]["roi"] == pytest.approx((1 - 0.80) / 0.80)
+    # from 3%: the 80c row never qualified, so the 40c row is the entry
+    assert by_threshold[0.03]["n"] == 1
+    assert by_threshold[0.03]["roi"] == pytest.approx((1 - 0.40) / 0.40)
+
+
 def test_prune_market_removes_samples(db_session: Session) -> None:
     scan_id = seed_rows(db_session)
     record(db_session, scan_id)
@@ -294,6 +355,26 @@ def test_market_fee_override_beats_the_preference(db_session: Session) -> None:
     assert row is not None
     assert row.fee_rate == 0.10
     assert row.effective_price == pytest.approx(0.50 + 0.10 * 0.5 * 0.5)
+
+
+def test_the_preference_can_be_made_to_beat_the_market_fee(db_session: Session) -> None:
+    """The .us case: Gamma reports .com's 0.10, the owner pays 0.0695, and the sample has to
+    record what they actually pay or the forward test grades a fee they never paid."""
+    scan_id = seed_rows(db_session)
+    row = forward.record_sample(
+        db_session,
+        scan_id=scan_id,
+        market=make_market(taker_fee_rate=0.10),
+        outcome_index=0,
+        book=make_book(_levels((0.50, 400.0))),
+        fair=make_fair(0.55),
+        prefs_fee_rate=0.0695,
+        now=NOW,
+        prefs_use_market_fee=False,
+    )
+    assert row is not None
+    assert row.fee_rate == 0.0695
+    assert row.effective_price == pytest.approx(0.50 + 0.0695 * 0.25)
 
 
 def test_replace_keeps_the_builder_honest() -> None:
