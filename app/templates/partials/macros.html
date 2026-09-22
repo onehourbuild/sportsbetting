@@ -1,0 +1,76 @@
+{# Shared display macros. Partials import this file themselves (imports do not flow into includes). #}
+
+{% macro league_badge(league) -%}
+<span class="badge badge-league league-{{ league }}">{{ league|upper if league else '?' }}</span>
+{%- endmacro %}
+
+{% macro quota_badge(quota, has_odds_key, demo_mode, compact=false) -%}
+{% if quota.remaining is not none %}
+  {% set tone = 'badge-good' if quota.remaining >= 100 else ('badge-warn' if quota.remaining >= 30 else 'badge-bad') %}
+  <span class="badge {{ tone }}" title="Odds API credits remaining this month">{{ quota.remaining }} credits</span>
+{% elif has_odds_key %}
+  <span class="badge" title="No Odds API response recorded yet">quota unknown</span>
+{% else %}
+  <span class="badge badge-warn" title="No ODDS_API_KEY: book refreshes use the ESPN scoreboard">{{ 'ESPN only' if compact else 'no odds key · ESPN only' }}</span>
+{% endif %}
+{% if demo_mode %}<span class="badge badge-info" title="DEMO_MODE: synthetic fixture data">demo</span>{% endif %}
+{%- endmacro %}
+
+{# Swaps only the CONTENTS of the persistent #toast live region in base.html (innerHTML), so
+   screen readers announce the change; replacing the node (hx-swap-oob="true") would insert
+   a fresh region that is not read. app.js un-hides the region and applies .error from the
+   data-error flag. #}
+{% macro toast_oob(message, error=false) -%}
+{% if message %}<div id="toast" class="toast{% if error %} error{% endif %}" role="status" aria-live="polite" hx-swap-oob="innerHTML"><span class="toast-msg" data-error="{{ '1' if error else '0' }}">{{ message }}</span></div>{% endif %}
+{%- endmacro %}
+
+{% macro opp_card(row) -%}
+<article class="card opp" data-league="{{ row.league }}" data-opportunity-id="{{ row.opp.id }}">
+  <header class="opp-head">
+    {{ league_badge(row.league) }}
+    {% if row.game %}
+    <a class="opp-title" href="/games/{{ row.game.id }}">{{ row.title }}</a>
+    {% else %}
+    <span class="opp-title">{{ row.title }}</span>
+    {% endif %}
+    <time class="opp-time" datetime="{{ row.start_iso }}" data-local>{{ row.start_time|dt_short }}</time>
+  </header>
+  <div class="opp-side">
+    <span class="opp-market">{{ row.market_label }}</span>
+    <strong class="opp-outcome">{{ row.side }}</strong>
+  </div>
+  <dl class="metrics">
+    <div><dt>Ask</dt><dd>{{ row.opp.ask|cents }}</dd></div>
+    <div><dt>Fair</dt><dd>{{ row.opp.fair_prob|pct }}</dd></div>
+    <div><dt>Edge</dt><dd class="good">{{ row.opp.edge|signed_pct }}</dd></div>
+    <div><dt>EV</dt><dd>{{ row.opp.ev_per_dollar|signed_pct }}</dd></div>
+    <div><dt>Stake</dt><dd>{% if row.opp.suggested_stake %}{{ row.opp.suggested_stake|usd }}{% else %}—{% endif %}</dd></div>
+    <div><dt>Fill</dt><dd>{{ row.opp.fill_price|cents }}</dd></div>
+    <div><dt>Limit</dt><dd>{{ row.opp.limit_price|cents }}</dd></div>
+    <div><dt>Books</dt><dd>{{ row.opp.n_books }}</dd></div>
+  </dl>
+  {% if not row.opp.fill_complete %}<p class="small"><span class="badge badge-warn">partial fill</span> the stored ask ladder absorbs only {{ row.opp.fill_usd|usd }} at {{ row.opp.fill_price|cents }}</p>{% endif %}
+  {# Why the stake is capped, or 0: sized off the ladder that still clears min_edge, or
+     below the exchange's minimum order. The edge itself is real either way. #}
+  {% if row.opp.stake_note %}<p class="small muted stake-note">stake: {{ row.opp.stake_note }}</p>{% endif %}
+  <p class="muted small">cost incl. fee {{ row.opp.effective_price|cents }} · {{ row.opp.fair_method }} de-vig{% if row.opp.books_used %} · {{ row.opp.books_used|join(', ') }}{% endif %}</p>
+  <div class="opp-actions">
+    {% if row.polymarket_url %}
+    <a class="btn" href="{{ row.polymarket_url }}" target="_blank" rel="noopener noreferrer">Open on Polymarket</a>
+    {% endif %}
+    <button class="btn btn-primary" type="button"
+            hx-get="/bets/new?opportunity_id={{ row.opp.id }}" hx-target="#sheet" hx-swap="innerHTML">Log bet</button>
+  </div>
+</article>
+{%- endmacro %}
+
+{% macro bet_head(view) -%}
+<header class="bet-head">
+  {% if view.league %}{{ league_badge(view.league) }}{% endif %}
+  {% if view.game %}<a class="bet-title" href="/games/{{ view.game.id }}">{{ view.title }}</a>{% else %}<span class="bet-title">{{ view.title }}</span>{% endif %}
+</header>
+<div class="opp-side">
+  <span class="opp-market">{{ view.label }}</span>
+  <strong class="opp-outcome">{{ view.side }}</strong>
+</div>
+{%- endmacro %}

@@ -1,0 +1,126 @@
+{
+  "leagues": [
+    {
+      "id": "10",
+      "uid": "s:1~l:10",
+      "name": "Major League Baseball",
+      "abbreviation": "MLB",
+      "slug": "mlb",
+      "season": {
+        "year": 2026,
+        "type": 2,
+        "slug": "regular-season"
+      }
+    }
+  ],
+  "season": {
+    "type": 2,
+    "year": 2026
+  },
+  "day": {
+    "date": "2026-09-17"
+  },
+  "events": [
+    {
+      "id": "401695707",
+      "uid": "s:1~l:10~e:401695707",
+      "date": "2026-09-17T23:07Z",
+      "name": "Baltimore Orioles at Toronto Blue Jays",
+      "shortName": "BAL @ TOR",
+      "competitions": [
+        {
+          "id": "401695707",
+          "uid": "s:1~l:10~e:401695707~c:401695707",
+          "date": "2026-09-17T23:07Z",
+          "attendance": 0,
+          "type": {
+            "id": "1",
+            "abbreviation": "STD"
+          },
+          "timeValid": true,
+          "neutralSite": false,
+          "conferenceCompetition": false,
+          "playByPlayAvailable": false,
+          "recent": false,
+          "venue": {
+            "id": "213",
+            "fullName": "Rogers Centre",
+            "address": {
+              "city": "Toronto",
+              "state": "ON"
+            },
+            "indoor": true
+          },
+          "competitors": [
+            {
+              "id": "14",
+              "uid": "s:1~l:10~t:14",
+              "type": "team",
+              "order": 0,
+              "homeAway": "home",
+              "team": {
+                "id": "14",
+                "uid": "s:1~l:10~t:14",
+                "location": "Toronto",
+                "name": "Blue Jays",
+                "abbreviation": "TOR",
+                "displayName": "Toronto Blue Jays",
+                "shortDisplayName": "Blue Jays",
+                "isActive": true
+              },
+              "score": "5",
+              "winner": true
+            },
+            {
+              "id": "1",
+              "uid": "s:1~l:10~t:1",
+              "type": "team",
+              "order": 1,
+              "homeAway": "away",
+              "team": {
+                "id": "1",
+                "uid": "s:1~l:10~t:1",
+                "location": "Baltimore",
+                "name": "Orioles",
+                "abbreviation": "BAL",
+                "displayName": "Baltimore Orioles",
+                "shortDisplayName": "Orioles",
+                "isActive": true
+              },
+              "score": "2",
+              "winner": false
+            }
+          ],
+          "status": {
+            "clock": 0.0,
+            "displayClock": "0:00",
+            "period": 9,
+            "type": {
+              "id": "3",
+              "name": "STATUS_FINAL",
+              "state": "post",
+              "completed": true,
+              "description": "Final",
+              "detail": "Final",
+              "shortDetail": "Final"
+            }
+          }
+        }
+      ],
+      "status": {
+        "clock": 0.0,
+        "displayClock": "0:00",
+        "period": 9,
+        "type": {
+          "id": "3",
+          "name": "STATUS_FINAL",
+          "state": "post",
+          "completed": true,
+          "description": "Final",
+          "detail": "Final",
+          "shortDetail": "Final"
+        }
+      }
+    }
+  ]
+}

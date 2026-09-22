@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{% block title %}{{ app_name }}{% endblock %}</title>
+  <meta name="description" content="Polymarket edge finder for NFL, NBA and MLB.">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f5f7fa">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b0f14">
+  <meta name="color-scheme" content="dark light">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  {# "default" lets iOS color the status bar from the theme-color metas above;
+     "black-translucent" painted WHITE text over the near-white light-mode topbar. #}
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Edges">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/static/icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon-180.png">
+  <link rel="stylesheet" href="/static/app.css?v={{ app_version }}">
+  <script src="/static/htmx.min.js?v={{ app_version }}" defer></script>
+  <script src="/static/app.js?v={{ app_version }}" defer></script>
+  {% block head %}{% endblock %}
+</head>
+<body hx-boost="false">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="topbar">
+    <a class="brand" href="/">{{ app_name }}</a>
+    {% block topbar %}<div id="topbar-right" class="topbar-right">{% block topbar_right %}{% endblock %}</div>{% endblock %}
+  </header>
+
+  <main id="main" class="page">
+    {% block content %}{% endblock %}
+  </main>
+
+  <nav class="bottom-nav" aria-label="Primary">
+    {% set path = request.url.path %}
+    <a href="/" class="nav-item{% if path == '/' or path.startswith('/games') %} active{% endif %}"{% if path == '/' or path.startswith('/games') %} aria-current="page"{% endif %}>
+      <span class="nav-icon" aria-hidden="true">&#9650;</span><span>Edges</span>
+    </a>
+    <a href="/bets" class="nav-item{% if path.startswith('/bets') %} active{% endif %}"{% if path.startswith('/bets') %} aria-current="page"{% endif %}>
+      <span class="nav-icon" aria-hidden="true">&#9776;</span><span>Bets</span>
+    </a>
+    <a href="/settings" class="nav-item{% if path.startswith('/settings') %} active{% endif %}"{% if path.startswith('/settings') %} aria-current="page"{% endif %}>
+      <span class="nav-icon" aria-hidden="true">&#9881;</span><span>Settings</span>
+    </a>
+    <a href="/diagnostics" class="nav-item{% if path.startswith('/diagnostics') %} active{% endif %}"{% if path.startswith('/diagnostics') %} aria-current="page"{% endif %}>
+      <span class="nav-icon" aria-hidden="true">&#9673;</span><span>Diag</span>
+    </a>
+  </nav>
+
+  <div id="sheet" class="sheet"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", function () {
+        navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(function () {});
+      });
+    }
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

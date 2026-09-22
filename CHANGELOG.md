@@ -1,4 +1,315 @@
 # CHANGELOG
 
 ## Unreleased — v1 build (2026-09-18)
+- `app/services/us_import.py`: translates .us activity rows into the ledger's existing
+  `Fill`, so both feeds share one set of rules about what becomes a bet. Uses `isAggressor`
+  for real maker/taker (a maker pays no fee, which .com could never tell), and **refuses any
+  row that will not say which outcome it was on** rather than attaching it to a side.
+- `app/clients/polymarket_us_private.py`: Ed25519-signed reads of the owner's own .us
+  activity feed, behind `PM_US_API_KEY` / `PM_US_API_SECRET` in `.env` (both `SecretStr`,
+  both absent by default, importer off). Read-only by construction -- the module has no
+  code that places, cancels or sizes an order. Adds `cryptography`, checked for win_amd64
+  wheels before adding it.
+- `app/clients/polymarket_us.py`: keyless Polymarket US market data emitting the existing
+  `PmMarket`, so matching and the edge math work unchanged. Reads the per-market
+  `feeCoefficient` (0.0695), maps full-game winner/total, and **refuses every .us spread**
+  because its title, question and outcomes disagree about which team each side is -- a
+  wrong answer there recommends the opposite team. Refusals surface on Diagnostics.
+- `venue` preference (Polymarket US / Polymarket) owning the taker fee: .us charges 0.0695,
+  .com 0.05, and a fee left at the wrong one's number overstates every edge. Switching
+  venue carries an untouched fee with it; a rate the owner chose is left alone. Settings
+  warns on a mismatch, and databases written before the preference are corrected once.
+
+### The paid scan is its own task (2026-09-21)
+- **The hourly task no longer spends credits.** `forward-scan.cmd` runs `--kind poly`
+  (Polymarket and ESPN, both free); the book refresh moved to `books-scan.cmd` /
+  `books-scan.vbs` and a new **"EdgeFinder books scan"** task at 11:00 and 18:00. A
+  `--kind both` run costs 6 credits against a 500/month free tier, so hourly would have
+  drained it in 3.5 days. Twice daily is 360/month with headroom for manual scans.
+- The hourly poly scan still prices everything -- it reuses the book quotes the paid scan
+  stored, so opportunity counts are unchanged between refreshes.
+- **Every settings save logs the field names it received** (names only, never values), and
+  the server now writes to `data/server.log`. It had no log at all, which is why a field
+  silently missing from a form took three rounds to find.
+
+### Paste the Odds API key into Settings (2026-09-21)
+- **`Prefs.odds_api_key`**: the key can be saved from the Settings page and takes effect on
+  the next scan, instead of requiring a `.env` edit and a restart. `ODDS_API_KEY` in the
+  environment still wins, so a deployment given a key on the command line cannot be
+  repointed by anyone who reaches the Settings page -- this app is shared with a link and
+  one password. `prefs.odds_api_key_for` is the single resolver, used by the scan and by
+  both "has a key" indicators.
+- **The key is never rendered back**, only "set, ending 1234". A blank box means leave the
+  saved key alone (it is never prefilled, so a blank box must not mean delete); removing it
+  is its own checkbox.
+- Malformed keys are rejected at save time rather than at the first request: a bad key does
+  not raise, it silently falls back to ESPN, which looks exactly like having no key.
+- 7 new tests -- and then an 8th, after the field shipped **outside the `<form>`**. It
+  rendered, accepted a pasted key and dropped it on submit with no error anywhere; the
+  other settings saved normally, so `updated_at` moved and nothing looked wrong. The
+  handler tests could not see it because they post to the endpoint rather than through the
+  page. `test_every_settings_input_is_inside_the_settings_form` reads the rendered HTML and
+  asserts every input the handler consumes falls inside the form element; it was confirmed
+  to fail against the broken layout before being kept.
+
+### The fee preference can outrank Gamma (2026-09-21)
+- **`Prefs.use_market_fee`** (Settings, default on). Gamma reports polymarket.com's
+  per-market `takerBaseFee` and the app took it over the preference, which is right on
+  .com and wrong on .us: .us charges 0.0695 where Gamma says 0.10, publishes no Gamma of
+  its own, and the owner trades .us -- so the rate they set was being silently replaced and
+  every edge costed at a fee they never pay. Turning it off makes the preference
+  authoritative. `edge.resolve_fee_rate` is now the single place that decides, used by
+  `build_opportunity`, `stake_note_for` and `forward.record_sample`.
+- Measured: at the corrected rate the live slate went from 7 candidates to 25 and the best
+  edge from -0.79% to -0.17%. None became positive.
+- **`min_edge` now accepts a negative threshold** (floor -0.25). With one book nothing on a
+  live slate clears zero, so a floor of 0 meant the Edges page could only ever be empty and
+  "show me the closest ones anyway" could not be asked for. Kelly clamps a negative edge to
+  a $0 stake, so these list without being sized.
+- 6 new tests.
+
+### American spelling throughout (2026-09-21)
+- 24 files: `favourite` (including the rule labels and `_favorite`), `artefact`,
+  `behaviour`, `colour`, `recognised`, `labelled`, `defence`, `normalised`.
+
+### Strategy bake-off (2026-09-21)
+- **28 betting rules scored over the same 6,302 resolved outcomes**
+  (`app/services/strategies.py`, `python -m app.cli strategy-bakeoff`). A rule is any
+  function of what was knowable before kickoff -- price, league, market type, side,
+  liquidity, freshness -- and none may see the result, which is pinned by a test that flips
+  every result and asserts no rule's picks move. Each rule reports picks, win rate, what
+  its own prices implied, return per dollar net of the taker fee, and a p value.
+- **Two guards against finding a winner that is not there.** Testing 28 rules at p < 0.05
+  is expected to produce one winner by luck, so the table is scored against a permutation
+  null: results shuffled inside 2c price bands, which keeps the market exactly as
+  calibrated as it was and destroys everything else. And every league's history is cut at
+  its own median kickoff, rules ranked on the early half, then re-scored unchanged on the
+  late half.
+- `--csv DIR` writes `bakeoff-summary.csv` (a line per rule) and `bakeoff-picks.csv` (a line
+  per bet: question, side, price, cost with fee, result, return, and which rules bought it),
+  with a test asserting the per-bet returns sum to the summary's total.
+- `backtest._normal_cdf` and `backtest._paired_only` are now public; the bake-off needs the
+  same pairing filter and the same normal tail.
+- 17 new tests (`tests/test_strategies.py`).
+
+### Forward report counts bets, not rows (2026-09-21)
+- **A bet is an outcome, not a scan.** `forward.report` counted every stored sample as a
+  separate bet, but the hourly scan re-records the same outcome for as long as it stays
+  priceable. On three days of live data that turned one winning outcome seen eleven times
+  into "+47% ROI on 13 bets". `forward._one_bet_per_token` now keeps one row per token —
+  the first scan at which it cleared the threshold, which is when you would have bought —
+  so the same three days read 3 bets, and 0 at the app's own 2% threshold. The report
+  prints graded outcomes and the row count behind them separately.
+- 2 new tests (`tests/test_forward.py`) rebuild the exact eleven-copies shape and pin which
+  copy is priced.
+
+### Polymarket US found (2026-09-21)
+- `docs/STATUS-2026-09-21.md`: the owner's funded account is on **polymarket.us**, a
+  separate US-regulated exchange with no wallets, so the wallet importer cannot see their
+  bets; the .us taker fee coefficient is **0.0695** against the 0.05 the app assumes; and
+  .us market identity is a `marketSlug`, not a condition id. The two venues price the same
+  game the same, so the prices are fine and the fee and the ledger are not. Includes the
+  verified spec for a key-based .us importer and the keyless .us market API.
+
+### Wallet import (2026-09-20)
+- **Your Polymarket fills become ledger rows** (`app/services/wallet_import.py`). Set your
+  proxy wallet address under Settings, Polymarket wallet, and every scan reads data-api
+  `/trades?user=` (public, keyless) and logs each pre-game BUY as a taker bet: fills in one
+  transaction on one outcome are one bet at the volume-weighted price, keyed by
+  `transactionHash:asset` so a re-import is a no-op, with `fair_at_bet` taken from the
+  app's latest pricing of that outcome at or before the fill. SELLs, fills after kickoff,
+  markets the app does not track, and unparseable rows are counted and listed under
+  Diagnostics, Other notes, `wallet_import`. Imported bets show an "imported" badge in the
+  ledger; settlement and CLV treat them like any other bet. `python -m app.cli
+  import-wallet [--wallet 0x...]` runs it on demand. Read-only: no key, no orders.
+- `Bet.source` ("manual" | "wallet") and `Bet.import_key`; `Prefs.pm_wallet`. Both added
+  to existing databases by `add_missing_columns` on start.
+- 16 new tests (`tests/test_wallet_import.py`) over `fixtures/data_trades_wallet.json`.
+
+### First live read (2026-09-20)
+- `docs/STATUS-2026-09-20.md`: the app is deployed (two installs on the owner's PC), the
+  client parsers matched live payloads, "market closed" on Diagnostics was verified against
+  Gamma as real resolutions, and the phone install's 0 matched is explained by a book
+  refresh that has never run. Includes the forward-test table so far and Kalshi public API
+  field names for the future client.
+- `docs/OWNER-GUIDE.md`: how to log a bet, a worked Monday-night example (no bet: all
+  three venues agree to the cent), how the app improves (evidence and settings, not
+  learning), and where funds live (the exchanges, never the app).
+
+### Measuring whether it wins (2026-09-18)
+- **Forward test** (`forward_samples`, `app/services/forward.py`). Every outcome a scan can
+  price is now recorded whatever its edge - not just those above `min_edge`, which is all
+  `Opportunity` ever stored and which on an ESPN-only slate is nothing at all. Samples carry
+  the ask, the fee actually charged, the fee-inclusive price, the book fair value, the depth
+  at the best ask and the hours to kickoff; they are graded from Polymarket's own resolution
+  on a later scan. `python -m app.cli forward-report` buckets the graded rows by edge
+  threshold, so the threshold is chosen from data afterwards instead of guessed up front.
+- **`/games` list page.** The app had no way to reach a game when there were no edges - the
+  home page IS the edge list - so a correctly-working app looked broken and empty. League
+  chips, market counts, a "no book line" marker, upcoming and started shown separately.
+- **Back test** (`historical_samples`, `app/services/backtest.py`).
+  `backtest-harvest` walks Polymarket's resolved sports markets and rebuilds each one's last
+  pre-kickoff traded price from `data-api/trades` (CLOB `/prices-history` is empty for
+  resolved markets and ESPN drops odds from finished games, so both obvious sources have no
+  history). `backtest-report` prints calibration and return by price band: what the market
+  charged, how often that outcome actually won, and the return net of the taker fee.
+  In-play trades are dropped and a close staler than 12h is excluded by default - the two
+  easiest ways to fake a winning back test. The report also prints a p-value per band, and
+  `--paired` keeps only markets whose two sides form one simultaneous quote: without it the
+  live NFL data showed a single "significant" band (90-99c, p=0.003) that turned out to be
+  built entirely from one-sided closing prices and reversed sign under a tighter filter.
+- 52 new tests (1250 total), plus SQLite WAL + a 30s busy timeout: the scheduled scan and
+  the web app now write the same file, and in the default journal mode a scan mid-write made
+  page loads fail with "database is locked" (observed while harvesting).
+
+### Live-API fixes (2026-09-18, first run against the real APIs)
+- **ESPN 403 on every request.** `site.api.espn.com` allowlists recognized HTTP-client
+  User-Agents; `polymarket-edge-finder/0.1` was refused, `curl`/`python-httpx`/
+  `python-requests`/`okhttp`/`Go-http-client` were served. `transport.USER_AGENT` now leads
+  with the real httpx token and keeps the app name after it.
+- **ESPN odds payload re-shaped.** The flat `homeTeamOdds.moneyLine` / `spreadOdds` /
+  `overOdds` / `underOdds` fields are gone; prices now live in nested `moneyline`,
+  `pointSpread` and `total` blocks with `{open, close}` phases and string values. The old
+  parser read nothing from them, so `to_book_games` returned nothing and a full live slate
+  scanned to `matched=0, opps=0` silently. `_parse_event` reads the nested shape (preferring
+  `close`), keeping the legacy fields as the winner where a payload still has them.
+- **Spreads come from `pointSpread`'s per-side signed lines**, not from parsing `details` and
+  placing a team token. For baseball `details` is the moneyline (`"CHC -149"`), which as a
+  spread would price against a −149-run line: `parse_spread_details` now also rejects any
+  |line| > `MAX_SPREAD_POINTS` (60).
+- Six regression tests covering the nested payload, the `open` fallback, the MLB `details`
+  trap, an empty block contributing nothing, and the User-Agent contract. Suite 1198 green.
+- Net effect on a live MLB slate: `matched` 0 → 206, book quotes 0 → 146, and the edge math
+  runs (best observed edge +0.17% against a 2% threshold, i.e. correctly reporting no bet).
+- requirements.lock is now resolved with `--universal`, so platform markers survive:
+  uvloop (no Windows wheel, setup.py refuses to build there) is excluded from Windows and
+  colorama is included for it. Guarded offline by tests/test_requirements_lock.py and
+  online by scripts/audit_lock_windows.py.
+- Windows scripts are ASCII-only, enforced by tests/test_windows_scripts.py: PowerShell
+  5.1 reads a .ps1 as Windows-1252, so a UTF-8 em dash in a comment broke the parse before
+  the first line ran. The same test pins the winget ids to their manifest spelling.
+- Windows tool installs: corrected the case-sensitive winget id for Tailscale, find tools
+  that are installed but off PATH, decide success by locating the executable rather than
+  by winget's exit code, and fall back to the Tailscale MSI.
+- Windows install fixed after its first real run: `scripts/bootstrap-windows.ps1` installs
+  from a zip over HTTP through `irm | iex` (no Git, no execution-policy wall),
+  `setup-windows.ps1` self-elevates instead of relying on `#Requires`, and the Odds API
+  key is prompted for rather than passed as a command-line argument. `docs/WINDOWS.md`
+  documents the three failures and how each is avoided.
+- `docs/HANDOFF.md`: the state a fresh session needs to pick the build back up.
 - Adjusted build prompt, spec, research notes, architecture contract.
+- Scaffold: pyproject/requirements/Makefile/Dockerfile/fly.toml/CI, Settings, db, models
+  (all 8 tables), core types, transport (Http + Fixture), prefs service, templating
+  filters, app factory with cookie auth middleware, PWA manifest/sw/icons, 59 tests.
+- Core math (`odds_math`, `edge`, `clv`) with the hand-checked contract vectors; team
+  aliases for all 92 teams, market-to-game matching and per-line fair probabilities
+  (`matching`); Polymarket question/line parsing (`parsing`).
+- PolymarketClient (Gamma events/markets/teams + CLOB books) with paging, chunked book
+  fetches, defensive parsing and unparseable reporting; synthetic Gamma/CLOB fixtures for
+  the seven-game slate; tests/test_polymarket_client.py (27 tests).
+- OddsApiClient (key redaction, quota headers, cost estimate) and EspnClient (scoreboard
+  as a single -110 book) with synthetic fixtures and tests.
+- Phone-first UI: edges list with league chips, scan bar (Refresh Polymarket / Refresh
+  Books with credit cost + hx-confirm), opportunity cards with Polymarket deep link and
+  htmx log-bet bottom sheet; game detail with per-outcome quotes, opportunities, per-book
+  table, top-5 ask depth and limit price; bet ledger with summary tiles, open/settled
+  lists, manual settle; settings form for every Prefs field with key/quota/demo status;
+  diagnostics with last 20 scans, errors/unmatched/unparseable, raw sample rows;
+  dark/light tokens, sticky bottom nav, toast + sheet containers;
+  tests/test_routes_ui.py (31 tests).
+- Integration (v1 works end to end): `services/scan.py` (`run_scan` for poly/books/both
+  with stored-book reuse, ESPN fallback, per-league error isolation, Game/Market upserts,
+  PmQuote/BookQuote/Opportunity snapshots, unmatched/unparseable/"no book at line" notes,
+  settlement lookups for open bets; `run_scan_default`, `estimate_books_cost`,
+  `quota_status`), `services/bets.py` (taker/maker `create_bet`, manual and automatic
+  settlement with P&L, closing-line capture with CLV, ledger summary),
+  `services/adapters.py` (rows -> core values), `services/demo.py` (fixture transport +
+  idempotent seed that settles the demo Orioles bet), `services/scheduler.py`
+  (APScheduler, off by default, non-overlapping), CLI `scan|settle|demo-seed`, lifespan
+  wiring and an active-Settings override; Docker entrypoint that fixes volume ownership
+  and drops privileges; service worker no longer caches authenticated pages; fixture
+  corrections (LAL@BOS asks 0.37/0.64, NYY/LAD run line 0.58/0.43);
+  tests/test_scan.py, test_bets.py, test_scheduler.py, test_cli.py, test_e2e_demo.py
+  (49 tests; 1009 total).
+- Review fixes (see docs/DECISIONS.md "Review round" entries): closing line and CLV
+  come from the last pre-kickoff snapshot and are captured before settlement; only
+  pre-game, tradable markets are priced (started / paused / closed markets listed on
+  Diagnostics); the stored limit price rests one tick below the ask and maker bets that
+  would cross are rejected; partial fills persisted (`fill_complete`, `fill_usd`) and
+  shown, bet form prefills the fillable stake; open-bet mark net of the exit fee;
+  series-titled markets without a type are not games, inferred types need a
+  `gameStartTime`; `/events` paging is ordered, filtered and de-duplicated; `market()`
+  accepts a league hint for settlement; Game rows keyed by Polymarket event id
+  (doubleheaders); ESPN dates in US Eastern; stored-snapshot fallback when both fresh
+  sources fail; conventions and unresolved book teams recorded in `Scan.notes` and shown
+  on Diagnostics; `init_db` backfills missing columns. Security: prod refuses the
+  default/short `SECRET_KEY` and short passwords, session cookie bound to the password,
+  login lockout with 429/Retry-After, `Cache-Control: no-store` on authenticated
+  responses, httpx quieted and `apiKey=` redacted from all logs, Docker image defaults
+  to `APP_ENV=prod`, startup warnings for disabled auth and lingering demo bets. Delivery:
+  hashed `requirements.lock` installed by Docker/CI/`make setup`, versioned static URLs
+  and a stale-while-revalidate service worker cache, network-free `demo-seed` (refused
+  outside dev without `DEMO_MODE`) plus `demo-clear`, README "On your phone in 10
+  minutes", scheduler/Fly auto-stop caveat. UI: toasts announced via the persistent
+  live region, 44 px tap targets, NBA badge token, two-column tiles on narrow phones,
+  bottom-sheet scroll lock, out-of-band topbar refresh, light/dark `theme-color`,
+  consistent money/share/tick formatting. Tests: 1094 total (85 new), including the
+  stored-fallback, settlement-lookup-failure, closing-branch, prefs-boundary,
+  scheduler-error, upsert_game-fallback and per-book-skip cases the review listed.
+- Review round 2 (see docs/DECISIONS.md "Review round 2" entries). Pricing: the suggested
+  stake is capped by the ask depth that still clears `min_edge` (`edge_clearing_depth` /
+  `plan_stake`), so a thin top level can no longer produce a negative-EV suggestion; a
+  stake below the market's minimum order is reported as 0 with a reason
+  (`Opportunity.stake_note`, shown on the card and the game page); a 50/50 resolution
+  settles as a **push** (`settle_bet_manual` result `push`, `ledger_summary.n_push`, a
+  Push button in the ledger) instead of a void with a fictitious P&L of 0; the match
+  window is per league (`SERIES_WINDOW_HOURS`, MLB/NBA 6 h or the same US/Eastern game
+  day) so a series game is never priced against the neighbouring day's lines, with a new
+  `"different game day"` reason on Diagnostics; a sibling market can no longer overwrite a
+  game's kickoff with the event's listing date; `SCAN_LOCK` / `ScanBusy` stop a second
+  scan queueing behind the first and spending Odds API credits twice; `create_bet` and
+  `settle_bet_manual` take an injectable `now`. Clients and security: a per-market taker
+  fee is believed only inside a 0.01–0.20 band (a bare `0.05` read as basis points would
+  have erased the fee and manufactured edges everywhere) and every accepted or rejected
+  override is recorded in the scan notes and shown on Diagnostics; ESPN contributes a
+  spread or total only when the payload prices both sides, never at an invented -110;
+  `event.startDate` is no longer borrowed as a kickoff; a missing `acceptingOrders` falls
+  back to `enableOrderBook`/`active` and is otherwise reported unparseable; the optional
+  `/events` filters degrade instead of failing the page; a misconfigured production start
+  raises `SystemExit` with field names only, so a pydantic traceback can never print the
+  Odds API key (`SecretStr` for all three secrets, with a subprocess test); proxy address
+  headers are trusted only when `TRUSTED_PROXY_HEADER` names one (otherwise the login
+  lockout could be reset by rotating a forged header); cross-site state-changing requests
+  are refused; `nosniff`, `Referrer-Policy` and (in prod) HSTS on every response; the
+  Docker image sets `DATABASE_URL` explicitly and the entrypoint logs the resolved path.
+  UI: `POST /scan` runs in the threadpool, so a scan no longer freezes the whole app;
+  price prefills are formatted at the market's tick (a 0.001-tick market no longer
+  prefills an unusable maker price); the metrics grid stops splitting numbers on a 390 px
+  phone; the toast can no longer swallow taps on the sheet's own submit button; landscape
+  honours the left/right safe-area insets; the iOS status bar is readable in light mode; a
+  vanished opportunity retargets the sheet instead of nesting a second dialog; settled P&L
+  is signed; the request clock is injectable, so rendered ages and the stale-book badge
+  are asserted on both sides of the boundary. Fixtures: the NFL ESPN scoreboard carries
+  real `overOdds`/`underOdds`, matching docs/FIXTURES.md. Tests: 1192 passing.
+- Phone QA (Playwright, Chromium at iPhone dimensions): `/`, `/?league=mlb`, `/bets`,
+  `/settings`, `/diagnostics`, `/games/{id}`, the open bet sheet, landscape and a 320 px
+  phone all render with no horizontal page overflow, no console or page errors and no
+  4xx/5xx; the sheet has exactly one dialog and nothing covers its submit button. The one
+  element wider than the viewport is the Diagnostics scan table, which scrolls inside its
+  own `.table-wrap`.
+- `docs/PHONE.md`: deploy-to-Fly and Add-to-Home-Screen guide, iOS PWA caveats, first-run
+  demo seed and troubleshooting.
+- `docs/WINDOWS.md` and `scripts/run-windows.ps1`: self-host on an always-on Windows
+  desktop, reached from the phone over a Tailscale HTTPS address, started by Task
+  Scheduler. Covers the prod-on-your-own-machine settings (`APP_ENV=prod` for the Secure
+  cookie, `TRUSTED_PROXY_HEADER=x-forwarded-for` because Tailscale proxies from loopback)
+  and what the scheduler costs in Odds API credits once the host never sleeps.
+- `scripts/setup-windows.ps1`: one admin-PowerShell command does the whole Windows
+  install — winget for Git/Python/Tailscale, clone, venv from the hashed lockfile, a
+  generated passphrase and secret key written to a BOM-free `.env` (a UTF-8 BOM makes
+  pydantic read `\ufeffAPP_ENV` and silently start in dev), the scheduled task, sleep
+  disabled, a health-check wait, then `tailscale serve`. Idempotent; never overwrites an
+  existing `.env`. Paths use `Path::Combine` rather than `Join-Path`, which resolves its
+  argument through the PowerShell provider and throws on a drive that does not exist.
+  The three steps it cannot do — Tailscale sign-in, the HTTPS-certificates toggle, and
+  the phone — are called out where they fall.

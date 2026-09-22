@@ -1,0 +1,39 @@
+{% import "partials/macros.html" as m %}
+<section id="open-bets" class="bets-section">
+  <h2 class="sub">Open bets <span class="muted">({{ open_bets|length }})</span></h2>
+  {% if not open_bets %}
+  <div class="card empty"><p class="muted">No open bets. Log one from an edge card.</p></div>
+  {% endif %}
+  {% for v in open_bets %}
+  <article class="card bet" data-bet-id="{{ v.bet.id }}">
+    {{ m.bet_head(v) }}
+    <dl class="metrics metrics-4">
+      <div><dt>Stake</dt><dd>{{ v.bet.stake_usd|usd }}</dd></div>
+      <div><dt>Price</dt><dd>{{ v.bet.price|cents }}</dd></div>
+      <div><dt>Shares</dt><dd>{{ '%.1f'|format(v.bet.shares) }}</dd></div>
+      <div><dt>Mode</dt><dd>{{ v.bet.mode }}</dd></div>
+      <div><dt>Fair@bet</dt><dd>{{ v.bet.fair_at_bet|pct }}</dd></div>
+      <div><dt>Edge@bet</dt><dd>{{ v.bet.edge_at_bet|signed_pct }}</dd></div>
+      <div><dt>Now ask</dt><dd>{{ v.current_ask|cents }}</dd></div>
+      <div><dt>Mark net</dt><dd class="{{ 'good' if (v.mark_pnl or 0) > 0 else ('bad' if (v.mark_pnl or 0) < 0 else '') }}">{{ v.mark_pnl|usd_signed }}</dd></div>
+    </dl>
+    <p class="muted small">mark = sold at the bid net of the exit taker fee · placed {{ v.bet.placed_at|ago }}{% if v.bet.fee_usd %} · fee {{ v.bet.fee_usd|usd }}{% endif %}{% if v.bet.closing_fair is not none %} · closing fair {{ v.bet.closing_fair|pct }} · CLV {{ v.bet.clv|signed_pct }}{% endif %}{% if v.bet.source == 'wallet' %} · <span class="badge badge-info">imported</span>{% endif %}{% if v.bet.notes %} · {{ v.bet.notes }}{% endif %}</p>
+    {% if not compact %}
+    <div class="settle-row">
+      <button class="btn btn-sm" type="button" hx-post="/bets/{{ v.bet.id }}/settle" hx-vals='{"result": "won"}'
+              hx-target="#ledger" hx-swap="outerHTML" hx-confirm="Mark {{ v.side }} as WON?">Won</button>
+      <button class="btn btn-sm" type="button" hx-post="/bets/{{ v.bet.id }}/settle" hx-vals='{"result": "lost"}'
+              hx-target="#ledger" hx-swap="outerHTML" hx-confirm="Mark {{ v.side }} as LOST?">Lost</button>
+      {# A push is a 50/50 resolution: each share pays $0.50, so the P&L is real (and negative
+         after the taker fee) — unlike a void, where the order never filled and the stake is
+         returned untouched. #}
+      <button class="btn btn-sm" type="button" hx-post="/bets/{{ v.bet.id }}/settle" hx-vals='{"result": "push"}'
+              hx-target="#ledger" hx-swap="outerHTML" hx-confirm="Mark {{ v.side }} as a PUSH? Each share pays $0.50.">Push</button>
+      <button class="btn btn-sm btn-danger" type="button" hx-post="/bets/{{ v.bet.id }}/settle" hx-vals='{"result": "void"}'
+              hx-target="#ledger" hx-swap="outerHTML" hx-confirm="Void this bet on {{ v.side }}? The stake is returned.">Void</button>
+      {% if v.polymarket_url %}<a class="btn btn-sm" href="{{ v.polymarket_url }}" target="_blank" rel="noopener noreferrer">Polymarket</a>{% endif %}
+    </div>
+    {% endif %}
+  </article>
+  {% endfor %}
+</section>

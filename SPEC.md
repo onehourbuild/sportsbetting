@@ -30,10 +30,13 @@ Market types: `moneyline`, `spread`, `total`. Everything else on Polymarket is i
    the maker limit price for the minimum edge.
 6. Persist a Scan row, price snapshots, and Opportunity rows. The home page
    reads the latest scan; nothing is computed at request time except display.
-7. Settle: for every open Bet whose market is now `closed` on Gamma with a
-   resolved outcome, mark won/lost and compute P&L. For open bets whose game
-   has started and lack closing data, store closing fair prob and closing
-   Polymarket price from this scan, and compute CLV.
+7. Closing and settle: for bets whose game has started and lack closing data,
+   store the closing fair prob and closing Polymarket price from the **last
+   snapshot taken before the game started** (never in-play data) and compute
+   CLV; then, for every open Bet whose market is now `closed` on Gamma with a
+   resolved outcome, mark won/lost and compute P&L. Markets that are closed,
+   paused or already under way are never priced in step 5; they are listed on
+   Diagnostics with the reason.
 
 Two buttons drive it: **Refresh Polymarket** (steps 1, 2, 4–7 using the last
 book snapshot) and **Refresh Books** (step 3 then 4–7). Each shows how many
@@ -41,9 +44,11 @@ credits it will cost before it runs and how many remain after.
 
 ### Log a bet
 
-From an opportunity row: stake (prefilled with suggested), price (prefilled
-with the ask, editable for a limit order), mode taker/maker. Creates a Bet with
-fair prob, edge, fee, and shares at log time. Manual settle/void controls exist.
+From an opportunity row: stake (prefilled with suggested, or with the fillable
+amount when the ask ladder is thin), price (prefilled with the ask, editable for
+a limit order), mode taker/maker (a maker price at or above the current ask is
+refused: it would cross). Creates a Bet with fair prob, edge, fee, and shares at
+log time. Manual settle/void controls exist.
 
 ### Bet ledger
 
@@ -94,8 +99,8 @@ Environment (`.env`): `APP_PASSWORD`, `SECRET_KEY`, `DATABASE_URL`,
   price_american, point, last_update, fetched_at.
 - `Opportunity`: id, scan_id, market_id, token, outcome_key, outcome_name,
   ask, effective_price, fair_prob, fair_method, n_books, books_used (json),
-  edge, ev_per_dollar, kelly, suggested_stake, fill_price, limit_price,
-  computed_at.
+  edge, ev_per_dollar, kelly, suggested_stake, fill_price, fill_complete,
+  fill_usd, limit_price (resting: one tick below the ask at most), computed_at.
 - `Bet`: id, market_id, token, outcome_key, outcome_name, mode (taker|maker),
   price, shares, stake_usd, fee_usd, fair_at_bet, edge_at_bet, placed_at,
   status (open|won|lost|void), settled_at, pnl_usd, closing_fair,

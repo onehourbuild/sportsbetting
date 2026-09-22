@@ -1,0 +1,552 @@
+[
+  {
+    "id": "cb0e985e9fa1f971627c9d2c1df3ea65",
+    "sport_key": "americanfootball_nfl",
+    "sport_title": "NFL",
+    "commence_time": "2026-09-20T20:25:00Z",
+    "home_team": "Buffalo Bills",
+    "away_team": "Kansas City Chiefs",
+    "bookmakers": [
+      {
+        "key": "pinnacle",
+        "title": "Pinnacle",
+        "last_update": "2026-09-19T14:55:00Z",
+        "markets": [
+          {
+            "key": "h2h",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Buffalo Bills",
+                "price": 130
+              },
+              {
+                "name": "Kansas City Chiefs",
+                "price": -150
+              }
+            ]
+          },
+          {
+            "key": "spreads",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Buffalo Bills",
+                "price": -110,
+                "point": 3.5
+              },
+              {
+                "name": "Kansas City Chiefs",
+                "price": -110,
+                "point": -3.5
+              }
+            ]
+          },
+          {
+            "key": "totals",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "price": -110,
+                "point": 47.5
+              },
+              {
+                "name": "Under",
+                "price": -110,
+                "point": 47.5
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "betonlineag",
+        "title": "BetOnline.ag",
+        "last_update": "2026-09-19T14:55:00Z",
+        "markets": [
+          {
+            "key": "h2h",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Buffalo Bills",
+                "price": 130
+              },
+              {
+                "name": "Kansas City Chiefs",
+                "price": -152
+              }
+            ]
+          },
+          {
+            "key": "spreads",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Buffalo Bills",
+                "price": -112,
+                "point": 3.5
+              },
+              {
+                "name": "Kansas City Chiefs",
+                "price": -110,
+                "point": -3.5
+              }
+            ]
+          },
+          {
+            "key": "totals",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "price": -112,
+                "point": 47.5
+              },
+              {
+                "name": "Under",
+                "price": -110,
+                "point": 47.5
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "lowvig",
+        "title": "LowVig.ag",
+        "last_update": "2026-09-19T14:55:00Z",
+        "markets": [
+          {
+            "key": "h2h",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Buffalo Bills",
+                "price": 132
+              },
+              {
+                "name": "Kansas City Chiefs",
+                "price": -152
+              }
+            ]
+          },
+          {
+            "key": "spreads",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Buffalo Bills",
+                "price": -112,
+                "point": 3.5
+              },
+              {
+                "name": "Kansas City Chiefs",
+                "price": -108,
+                "point": -3.5
+              }
+            ]
+          },
+          {
+            "key": "totals",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "price": -112,
+                "point": 47.5
+              },
+              {
+                "name": "Under",
+                "price": -108,
+                "point": 47.5
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "draftkings",
+        "title": "DraftKings",
+        "last_update": "2026-09-19T14:55:00Z",
+        "markets": [
+          {
+            "key": "h2h",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Buffalo Bills",
+                "price": 129
+              },
+              {
+                "name": "Kansas City Chiefs",
+                "price": -155
+              }
+            ]
+          },
+          {
+            "key": "spreads",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Buffalo Bills",
+                "price": -115,
+                "point": 3.5
+              },
+              {
+                "name": "Kansas City Chiefs",
+                "price": -111,
+                "point": -3.5
+              }
+            ]
+          },
+          {
+            "key": "totals",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "price": -115,
+                "point": 47.5
+              },
+              {
+                "name": "Under",
+                "price": -111,
+                "point": 47.5
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "fanduel",
+        "title": "FanDuel",
+        "last_update": "2026-09-19T14:55:00Z",
+        "markets": [
+          {
+            "key": "h2h",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Buffalo Bills",
+                "price": 128
+              },
+              {
+                "name": "Kansas City Chiefs",
+                "price": -154
+              }
+            ]
+          },
+          {
+            "key": "spreads",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Buffalo Bills",
+                "price": -114,
+                "point": 3.5
+              },
+              {
+                "name": "Kansas City Chiefs",
+                "price": -112,
+                "point": -3.5
+              }
+            ]
+          },
+          {
+            "key": "totals",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "price": -114,
+                "point": 47.5
+              },
+              {
+                "name": "Under",
+                "price": -112,
+                "point": 47.5
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "d7844b8cbcb5b662df9f06187377572f",
+    "sport_key": "americanfootball_nfl",
+    "sport_title": "NFL",
+    "commence_time": "2026-09-20T17:00:00Z",
+    "home_team": "Philadelphia Eagles",
+    "away_team": "Dallas Cowboys",
+    "bookmakers": [
+      {
+        "key": "pinnacle",
+        "title": "Pinnacle",
+        "last_update": "2026-09-19T14:55:00Z",
+        "markets": [
+          {
+            "key": "h2h",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Philadelphia Eagles",
+                "price": -200
+              },
+              {
+                "name": "Dallas Cowboys",
+                "price": 170
+              }
+            ]
+          },
+          {
+            "key": "spreads",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Philadelphia Eagles",
+                "price": -110,
+                "point": -4.5
+              },
+              {
+                "name": "Dallas Cowboys",
+                "price": -110,
+                "point": 4.5
+              }
+            ]
+          },
+          {
+            "key": "totals",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "price": -110,
+                "point": 44.5
+              },
+              {
+                "name": "Under",
+                "price": -110,
+                "point": 44.5
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "betonlineag",
+        "title": "BetOnline.ag",
+        "last_update": "2026-09-19T14:55:00Z",
+        "markets": [
+          {
+            "key": "h2h",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Philadelphia Eagles",
+                "price": -202
+              },
+              {
+                "name": "Dallas Cowboys",
+                "price": 170
+              }
+            ]
+          },
+          {
+            "key": "spreads",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Philadelphia Eagles",
+                "price": -112,
+                "point": -4.5
+              },
+              {
+                "name": "Dallas Cowboys",
+                "price": -110,
+                "point": 4.5
+              }
+            ]
+          },
+          {
+            "key": "totals",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "price": -110,
+                "point": 44.5
+              },
+              {
+                "name": "Under",
+                "price": -112,
+                "point": 44.5
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "lowvig",
+        "title": "LowVig.ag",
+        "last_update": "2026-09-19T14:55:00Z",
+        "markets": [
+          {
+            "key": "h2h",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Philadelphia Eagles",
+                "price": -202
+              },
+              {
+                "name": "Dallas Cowboys",
+                "price": 172
+              }
+            ]
+          },
+          {
+            "key": "spreads",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Philadelphia Eagles",
+                "price": -112,
+                "point": -4.5
+              },
+              {
+                "name": "Dallas Cowboys",
+                "price": -108,
+                "point": 4.5
+              }
+            ]
+          },
+          {
+            "key": "totals",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "price": -108,
+                "point": 44.5
+              },
+              {
+                "name": "Under",
+                "price": -112,
+                "point": 44.5
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "draftkings",
+        "title": "DraftKings",
+        "last_update": "2026-09-19T14:55:00Z",
+        "markets": [
+          {
+            "key": "h2h",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Philadelphia Eagles",
+                "price": -205
+              },
+              {
+                "name": "Dallas Cowboys",
+                "price": 169
+              }
+            ]
+          },
+          {
+            "key": "spreads",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Philadelphia Eagles",
+                "price": -115,
+                "point": -4.5
+              },
+              {
+                "name": "Dallas Cowboys",
+                "price": -111,
+                "point": 4.5
+              }
+            ]
+          },
+          {
+            "key": "totals",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "price": -111,
+                "point": 44.5
+              },
+              {
+                "name": "Under",
+                "price": -115,
+                "point": 44.5
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "fanduel",
+        "title": "FanDuel",
+        "last_update": "2026-09-19T14:55:00Z",
+        "markets": [
+          {
+            "key": "h2h",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Philadelphia Eagles",
+                "price": -204
+              },
+              {
+                "name": "Dallas Cowboys",
+                "price": 168
+              }
+            ]
+          },
+          {
+            "key": "spreads",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Philadelphia Eagles",
+                "price": -114,
+                "point": -4.5
+              },
+              {
+                "name": "Dallas Cowboys",
+                "price": -112,
+                "point": 4.5
+              }
+            ]
+          },
+          {
+            "key": "totals",
+            "last_update": "2026-09-19T14:55:00Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "price": -112,
+                "point": 44.5
+              },
+              {
+                "name": "Under",
+                "price": -114,
+                "point": 44.5
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

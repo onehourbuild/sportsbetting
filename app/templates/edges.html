@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as m %}
+{% block title %}Edges · {{ app_name }}{% endblock %}
+{% block topbar %}{% include "partials/topbar_right.html" %}{% endblock %}
+{% block content %}
+<h1 class="page-title">Edges</h1>
+{% include "partials/scan_status.html" %}
+<nav class="chips" aria-label="League filter">
+  {% for item in league_filters %}
+  <a class="chip{% if item == league %} active{% endif %}" href="/?league={{ item }}"{% if item == league %} aria-current="page"{% endif %}>{{ 'All' if item == 'all' else item|upper }}</a>
+  {% endfor %}
+</nav>
+{% include "partials/edges_list.html" %}
+{% endblock %}

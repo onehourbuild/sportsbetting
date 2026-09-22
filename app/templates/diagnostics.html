@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Diagnostics · {{ app_name }}{% endblock %}
+{% block content %}
+<h1 class="page-title">Diagnostics</h1>
+
+<section class="card">
+  <h2 class="sub">Environment</h2>
+  <div class="stat"><span class="stat-label">App</span><span class="stat-value">{{ app_name }} {{ app_version }} · {{ app_env }}</span></div>
+  <div class="stat"><span class="stat-label">DEMO_MODE</span><span class="stat-value">{{ 'on' if demo_mode else 'off' }}</span></div>
+  <div class="stat"><span class="stat-label">ODDS_API_KEY</span><span class="stat-value">{{ 'set' if has_odds_key else 'not set' }}</span></div>
+  <div class="stat"><span class="stat-label">Odds API credits</span><span class="stat-value">{% if quota.remaining is not none %}{{ quota.remaining }} left{% else %}—{% endif %}</span></div>
+  <div class="stat"><span class="stat-label">Scheduler</span><span class="stat-value">poly {{ scheduler_poly_minutes }}m · books {{ scheduler_books_hours }}h</span></div>
+  <div class="stat"><span class="stat-label">Rows</span><span class="stat-value">{{ counts.games }} games · {{ counts.markets }} markets · {{ counts.opportunities }} opps · {{ counts.bets }} bets</span></div>
+  <div class="stat"><span class="stat-label">Quotes</span><span class="stat-value">{{ counts.pm_quotes }} pm · {{ counts.book_quotes }} book</span></div>
+  <p class="row"><a class="btn btn-sm" href="/healthz">/healthz</a></p>
+</section>
+
+<section class="card">
+  <h2 class="sub">Last {{ scans|length }} scan{{ '' if scans|length == 1 else 's' }}</h2>
+  {% if scans %}
+  <div class="table-wrap">
+    <table class="scan-table">
+      <thead>
+        <tr><th>#</th><th>Kind</th><th>Started</th><th>OK</th><th class="num">Markets</th><th class="num">Matched</th><th class="num">Opps</th><th class="num">Credits</th></tr>
+      </thead>
+      <tbody>
+      {% for s in scans %}
+        <tr class="{{ 'ok' if s.ok else 'failed' }}">
+          <td class="mono">{{ s.id }}</td>
+          <td>{{ s.kind }}{% if s.leagues %} <span class="muted small">{{ s.leagues|join(',') }}</span>{% endif %}</td>
+          <td>{{ s.started_at|ago }}</td>
+          <td>{% if s.ok %}<span class="badge badge-good">ok</span>{% else %}<span class="badge badge-bad">failed</span>{% endif %}</td>
+          <td class="num">{{ s.n_markets }}</td>
+          <td class="num">{{ s.n_matched }}</td>
+          <td class="num">{{ s.n_opps }}</td>
+          <td class="num">{% if s.credits_used is not none or s.credits_remaining is not none %}{{ s.credits_used if s.credits_used is not none else '—' }} / {{ s.credits_remaining if s.credits_remaining is not none else '—' }}{% else %}—{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted">No scans recorded yet. Run a refresh from the Edges page.</p>
+  {% endif %}
+</section>
+
+{% if latest %}
+<section class="card">
+  <h2 class="sub">Latest scan #{{ latest.id }} <span class="muted">({{ latest.kind }}, {{ latest.started_at|ago }})</span></h2>
+
+  <h3 class="sub">Errors ({{ errors|length }})</h3>
+  {% if errors %}
+  <ul class="diag-list errors">{% for e in errors %}<li class="mono">{{ e }}</li>{% endfor %}</ul>
+  {% else %}<p class="muted small">None.</p>{% endif %}
+
+  <h3 class="sub">Unmatched markets ({{ unmatched|length }})</h3>
+  {% if unmatched %}
+  <ul class="diag-list">
+    {% for item in unmatched %}
+    <li>
+      {% if item.reason %}<span class="badge badge-warn">{{ item.reason }}</span>{% endif %}
+      {% for k, v in item.fields %}<span class="kv"><span class="muted">{{ k }}</span> <span class="mono">{{ v }}</span></span>{% endfor %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}<p class="muted small">None.</p>{% endif %}
+
+  <h3 class="sub">Unparseable markets ({{ unparseable|length }})</h3>
+  {% if unparseable %}
+  <ul class="diag-list">
+    {% for item in unparseable %}
+    <li>
+      {% if item.reason %}<span class="badge badge-bad">{{ item.reason }}</span>{% endif %}
+      {% for k, v in item.fields %}<span class="kv"><span class="muted">{{ k }}</span> <span class="mono">{{ v }}</span></span>{% endfor %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}<p class="muted small">None.</p>{% endif %}
+
+  <h3 class="sub">Conventions in force</h3>
+  {% if conventions %}
+  <ul class="diag-list">
+    <li><span class="kv"><span class="muted">home/away</span> <span class="mono">{{ conventions.home_away }}</span></span></li>
+    <li><span class="kv"><span class="muted">match_window_hours</span> <span class="mono">{{ conventions.match_window_hours }}</span></span>
+        <span class="kv"><span class="muted">stale_book_minutes</span> <span class="mono">{{ conventions.stale_book_minutes }}</span></span></li>
+    {# A market quoting its own taker fee overrides the preference, so a rejected one
+       (outside the plausible band) changes every edge on that market. #}
+    {% for o in conventions.taker_fee_overrides or [] %}
+    <li><span class="kv"><span class="muted">fee override</span> <span class="mono">{{ o.league }} {{ o.market_id }}</span></span>
+        <span class="kv"><span class="muted">raw</span> <span class="mono">{{ o.raw }}</span></span>
+        <span class="kv"><span class="muted">used</span> <span class="mono">{% if o.rate is not none %}{{ o.rate }}{% else %}rejected — preference used{% endif %}</span></span></li>
+    {% endfor %}
+    {% if conventions.events_filters_dropped %}
+    <li><span class="badge badge-warn">events filters dropped</span> <span class="muted small">Gamma rejected the order/type filters, so the event list is unordered and unfiltered.</span></li>
+    {% endif %}
+  </ul>
+  {% else %}<p class="muted small">Not recorded by this scan.</p>{% endif %}
+
+  <h3 class="sub">Unresolved book teams ({{ unresolved_teams|length }})</h3>
+  {% if unresolved_teams %}
+  <p class="muted small">Team labels from the Odds API / ESPN that the alias table could not name; their games show as "no book game" until <code>app/core/matching.py</code> learns the label.</p>
+  <ul class="diag-list">
+    {% for item in unresolved_teams %}
+    <li>{% for k, v in item.fields %}<span class="kv"><span class="muted">{{ k }}</span> <span class="mono">{{ v }}</span></span>{% endfor %}</li>
+    {% endfor %}
+  </ul>
+  {% else %}<p class="muted small">None.</p>{% endif %}
+
+  {% if other_notes %}
+  <h3 class="sub">Other notes</h3>
+  <pre class="raw">{{ other_notes|tojson(indent=2) }}</pre>
+  {% endif %}
+</section>
+{% endif %}
+
+<section class="card">
+  <h2 class="sub">Raw samples</h2>
+  <p class="muted small">Latest stored row of each quote table, exactly as persisted.</p>
+  {% for name, obj, text in samples %}
+  <details class="raw-sample"{% if obj %} open{% endif %}>
+    <summary>{{ name }}{% if not obj %} <span class="muted">(none yet)</span>{% endif %}</summary>
+    <pre class="raw">{{ text }}</pre>
+  </details>
+  {% endfor %}
+</section>
+{% endblock %}

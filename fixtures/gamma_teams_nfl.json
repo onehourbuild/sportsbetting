@@ -1,0 +1,82 @@
+[
+  {
+    "id": 1001,
+    "name": "Kansas City Chiefs",
+    "league": "nfl",
+    "record": "2-0",
+    "alias": "Chiefs",
+    "abbreviation": "KC",
+    "createdAt": "2025-01-10T00:00:00Z",
+    "updatedAt": "2026-09-18T00:00:00Z"
+  },
+  {
+    "id": 1002,
+    "name": "Buffalo Bills",
+    "league": "nfl",
+    "record": "2-0",
+    "alias": "Bills",
+    "abbreviation": "BUF",
+    "createdAt": "2025-01-10T00:00:00Z",
+    "updatedAt": "2026-09-18T00:00:00Z"
+  },
+  {
+    "id": 1003,
+    "name": "Dallas Cowboys",
+    "league": "nfl",
+    "record": "1-1",
+    "alias": "Cowboys",
+    "abbreviation": "DAL",
+    "createdAt": "2025-01-10T00:00:00Z",
+    "updatedAt": "2026-09-18T00:00:00Z"
+  },
+  {
+    "id": 1004,
+    "name": "Philadelphia Eagles",
+    "league": "nfl",
+    "record": "2-0",
+    "alias": "Eagles",
+    "abbreviation": "PHI",
+    "createdAt": "2025-01-10T00:00:00Z",
+    "updatedAt": "2026-09-18T00:00:00Z"
+  },
+  {
+    "id": 1005,
+    "name": "Baltimore Ravens",
+    "league": "nfl",
+    "record": "1-1",
+    "alias": "Ravens",
+    "abbreviation": "BAL",
+    "createdAt": "2025-01-10T00:00:00Z",
+    "updatedAt": "2026-09-18T00:00:00Z"
+  },
+  {
+    "id": 1006,
+    "name": "San Francisco 49ers",
+    "league": "nfl",
+    "record": "2-0",
+    "alias": "49ers",
+    "abbreviation": "SF",
+    "createdAt": "2025-01-10T00:00:00Z",
+    "updatedAt": "2026-09-18T00:00:00Z"
+  },
+  {
+    "id": 1007,
+    "name": "Detroit Lions",
+    "league": "nfl",
+    "record": "1-1",
+    "alias": "Lions",
+    "abbreviation": "DET",
+    "createdAt": "2025-01-10T00:00:00Z",
+    "updatedAt": "2026-09-18T00:00:00Z"
+  },
+  {
+    "id": 1008,
+    "name": "Green Bay Packers",
+    "league": "nfl",
+    "record": "2-0",
+    "alias": "Packers",
+    "abbreviation": "GB",
+    "createdAt": "2025-01-10T00:00:00Z",
+    "updatedAt": "2026-09-18T00:00:00Z"
+  }
+]

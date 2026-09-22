@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Not found · {{ app_name }}{% endblock %}
+{% block content %}
+<h1 class="page-title">Not found</h1>
+<section class="card empty">
+  <p><strong>{{ what }}</strong> does not exist.</p>
+  {% if hint %}<p class="muted">{{ hint }}</p>{% endif %}
+  <a class="btn btn-primary" href="/">Back to edges</a>
+</section>
+{% endblock %}

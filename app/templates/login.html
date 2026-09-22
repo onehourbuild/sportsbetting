@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Sign in · {{ app_name }}</title>
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f5f7fa">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b0f14">
+  <meta name="color-scheme" content="dark light">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon-180.png">
+  <link rel="stylesheet" href="/static/app.css?v={{ app_version }}">
+</head>
+<body class="login-body">
+  <main class="login-card card">
+    <h1 class="brand">{{ app_name }}</h1>
+    <p class="muted">Personal tool. Enter the password to continue.</p>
+    {% if error %}<p class="alert alert-error" role="alert">{{ error }}</p>{% endif %}
+    <form method="post" action="/login" class="stack">
+      <input type="hidden" name="next" value="{{ next or '/' }}">
+      <label class="field">
+        <span>Password</span>
+        <input type="password" name="password" autocomplete="current-password" autofocus required>
+      </label>
+      <button type="submit" class="btn btn-primary btn-block">Sign in</button>
+    </form>
+  </main>
+</body>
+</html>
