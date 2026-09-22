@@ -9,10 +9,10 @@ no historical fair value and no historical edge.
 
 It CAN test the question underneath: **is Polymarket itself well calibrated?** For every
 resolved game market we know the price it last traded at before kickoff and whether that
-outcome then won. If 60c favourites win 60% of the time, there is no free money in the
+outcome then won. If 60c favorites win 60% of the time, there is no free money in the
 price alone and any edge has to come from the books. If they win 64%, that is an edge that
 needs no book data at all. The classic failure mode of betting markets — the
-favourite-longshot bias, where 5c longshots win far less than 5% of the time — shows up
+favorite-longshot bias, where 5c longshots win far less than 5% of the time — shows up
 here directly.
 
 Two sources, chosen because they are the ones that survive resolution:
@@ -339,7 +339,7 @@ def harvest(
     return stats
 
 
-def _normal_cdf(z: float) -> float:
+def normal_cdf(z: float) -> float:
     return 0.5 * (1.0 + math.erf(z / math.sqrt(2.0)))
 
 
@@ -359,10 +359,10 @@ def significance(n: int, wins: int, implied: float) -> tuple[float, float, float
     if se <= 0.0:
         return 0.0, 0.0, 1.0
     z = ((wins / n) - implied) / se
-    return se, z, 2.0 * (1.0 - _normal_cdf(abs(z)))
+    return se, z, 2.0 * (1.0 - normal_cdf(abs(z)))
 
 
-def _paired_only(rows: Sequence[HistoricalSample], max_pair_error: float) -> list[HistoricalSample]:
+def paired_only(rows: Sequence[HistoricalSample], max_pair_error: float) -> list[HistoricalSample]:
     """Keep only markets whose two sides form one believable simultaneous quote.
 
     Each side's close is its own last trade, so an illiquid side can carry a price from
@@ -371,7 +371,7 @@ def _paired_only(rows: Sequence[HistoricalSample], max_pair_error: float) -> lis
     its implied probability at p=0.003, the only "significant" result in the whole table.
     Requiring a fresh two-sided quote cut that band from 91 outcomes to 36 and the gap to
     -1.2%, and tightening the freshness further flipped its sign. A finding that changes
-    direction with the staleness filter is an artefact of the filter.
+    direction with the staleness filter is an artifact of the filter.
     """
     by_market: dict[str, list[HistoricalSample]] = {}
     for row in rows:
@@ -413,7 +413,7 @@ def report(
         query = query.where(HistoricalSample.close_age_hours <= max_close_age_hours)
     rows = list(session.scalars(query))
     if paired:
-        rows = _paired_only(rows, max_pair_error)
+        rows = paired_only(rows, max_pair_error)
 
     total = session.scalar(select(func.count()).select_from(HistoricalSample)) or 0
     span = session.execute(

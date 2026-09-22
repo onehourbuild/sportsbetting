@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 from app.db import get_engine, get_session_factory, init_db
 from app.logsetup import configure_logging
@@ -206,6 +207,32 @@ def cmd_backtest_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_strategy_bakeoff(args: argparse.Namespace) -> int:
+    from app.services import strategies
+
+    with _session() as session:
+        data = strategies.run(
+            session,
+            league=args.league,
+            # argparse cannot tell "not given" from a real value here, so each default is
+            # resolved to the module's rather than passed through as None.
+            fee_rate=strategies.DEFAULT_FEE_RATE if args.fee is None else args.fee,
+            max_close_age_hours=(
+                strategies.DEFAULT_MAX_CLOSE_AGE_HOURS if args.max_age is None else args.max_age
+            ),
+            paired=not args.unpaired,
+            reps=strategies.DEFAULT_PERMUTATIONS if args.reps is None else args.reps,
+            min_n=strategies.DEFAULT_MIN_N if args.min_n is None else args.min_n,
+            seed=args.seed,
+        )
+    print(strategies.format_run(data, top=args.top))
+    if args.csv:
+        written = strategies.write_csv(data, Path(args.csv))
+        for path in written:
+            print(f"wrote {path}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="app.cli", description="Polymarket Edge Finder CLI")
     parser.add_argument("--log-level", default=None, help="override LOG_LEVEL")
@@ -276,6 +303,30 @@ def build_parser() -> argparse.ArgumentParser:
         help="only markets whose two sides form one simultaneous quote (recommended)",
     )
     back.set_defaults(func=cmd_backtest_report)
+
+    bake = sub.add_parser(
+        "strategy-bakeoff",
+        help="score many betting rules over the harvested history and test the winner",
+    )
+    bake.add_argument("--league", choices=("nfl", "nba", "mlb"), default=None)
+    bake.add_argument("--fee", type=float, default=None, help="taker fee coefficient")
+    bake.add_argument("--max-age", type=float, default=None, help="max close age in hours")
+    bake.add_argument(
+        "--unpaired",
+        action="store_true",
+        help="include markets with only one side priced (not recommended: stale closes)",
+    )
+    bake.add_argument("--reps", type=int, default=None, help="shuffled-result repetitions")
+    bake.add_argument("--min-n", type=int, default=None, help="picks a rule needs to be ranked")
+    bake.add_argument("--seed", type=int, default=1729)
+    bake.add_argument("--top", type=int, default=None, help="only print the best N rules")
+    bake.add_argument(
+        "--csv",
+        default=None,
+        metavar="DIR",
+        help="also write bakeoff-summary.csv and bakeoff-picks.csv into DIR",
+    )
+    bake.set_defaults(func=cmd_strategy_bakeoff)
     return parser
 
 
