@@ -1,0 +1,115 @@
+{
+  "events": [
+    {
+      "id": "evt_nfl_nyg_lar_20260921",
+      "slug": "nfl-nyg-lar-2026-09-21",
+      "title": "New York Giants at Los Angeles Rams",
+      "homeTeam": "Los Angeles Rams",
+      "awayTeam": "New York Giants",
+      "gameStartTime": "2026-09-22T00:15:00Z",
+      "closed": false,
+      "markets": [
+        {
+          "marketSlug": "asc-nfl-nyg-lar-2026-09-21-winner",
+          "sportsMarketType": "football_team_full_game_winner",
+          "title": "New York Giants at Los Angeles Rams",
+          "question": "Who will win?",
+          "status": "open",
+          "outcomes": ["Los Angeles Rams", "New York Giants"],
+          "outcomePrices": ["0.73", "0.27"],
+          "bestBidQuote": ["0.73", "0.26"],
+          "bestAskQuote": ["0.74", "0.27"],
+          "feeCoefficient": 0.0695,
+          "orderPriceMinTickSize": 0.01,
+          "minimumTradeQty": 5,
+          "gameStartTime": "2026-09-22T00:15:00Z",
+          "liquidity": 41000.0,
+          "volume": 128000.0
+        },
+        {
+          "marketSlug": "asc-nfl-nyg-lar-2026-09-21-total-47pt5",
+          "sportsMarketType": "football_team_full_game_total",
+          "title": "Total points over/under 47.5",
+          "question": "Will the game go over 47.5 points?",
+          "status": "open",
+          "line": 47.5,
+          "outcomes": ["Over 47.5", "Under 47.5"],
+          "outcomePrices": ["0.50", "0.50"],
+          "bestBidQuote": ["0.50", "0.49"],
+          "bestAskQuote": ["0.51", "0.50"],
+          "feeCoefficient": 0.0695,
+          "orderPriceMinTickSize": 0.01,
+          "minimumTradeQty": 5,
+          "gameStartTime": "2026-09-22T00:15:00Z"
+        },
+        {
+          "marketSlug": "asc-nfl-nyg-lar-2026-09-21-pos-6pt5",
+          "sportsMarketType": "football_team_full_game_spread",
+          "title": "Los Angeles Rams wins by over 6.5 points",
+          "question": "Will the New York Giants cover 6.5 points?",
+          "status": "open",
+          "line": 6.5,
+          "outcomes": ["-6.50", "+6.50"],
+          "outcomePrices": ["0.53", "0.47"],
+          "bestBidQuote": ["0.52", "0.46"],
+          "bestAskQuote": ["0.53", "0.48"],
+          "feeCoefficient": 0.0695,
+          "orderPriceMinTickSize": 0.01,
+          "minimumTradeQty": 5,
+          "gameStartTime": "2026-09-22T00:15:00Z"
+        },
+        {
+          "marketSlug": "asc-nfl-nyg-lar-2026-09-21-2h-pos-3pt5",
+          "sportsMarketType": "football_team_second_half_spread",
+          "title": "Los Angeles Rams wins by over 3.5 points in 2nd half",
+          "question": "Will the Rams cover 3.5 in the second half?",
+          "status": "open",
+          "line": 3.5,
+          "outcomes": ["-3.50", "+3.50"],
+          "outcomePrices": ["0.50", "0.50"],
+          "bestAskQuote": ["0.51", "0.50"],
+          "feeCoefficient": 0.0695,
+          "minimumTradeQty": 5,
+          "gameStartTime": "2026-09-22T00:15:00Z"
+        },
+        {
+          "marketSlug": "asc-nfl-nyg-lar-2026-09-21-anytime-td-nacua",
+          "sportsMarketType": "football_player_anytime_touchdown",
+          "title": "Puka Nacua to score a touchdown",
+          "question": "Will Puka Nacua score a touchdown?",
+          "status": "open",
+          "outcomes": ["Yes", "No"],
+          "outcomePrices": ["0.61", "0.39"],
+          "bestAskQuote": ["0.62", "0.40"],
+          "feeCoefficient": 0.0695,
+          "minimumTradeQty": 5,
+          "gameStartTime": "2026-09-22T00:15:00Z"
+        }
+      ]
+    },
+    {
+      "id": "evt_nba_bos_mia_20260921",
+      "slug": "nba-bos-mia-2026-09-21",
+      "title": "Boston Celtics at Miami Heat",
+      "homeTeam": "Miami Heat",
+      "awayTeam": "Boston Celtics",
+      "gameStartTime": "2026-09-22T23:30:00Z",
+      "closed": false,
+      "markets": [
+        {
+          "marketSlug": "asc-nba-bos-mia-2026-09-21-winner",
+          "sportsMarketType": "basketball_team_full_game_winner",
+          "title": "Boston Celtics at Miami Heat",
+          "question": "Who will win?",
+          "status": "open",
+          "outcomes": ["Boston Celtics", "Miami Heat"],
+          "outcomePrices": ["0.62", "0.38"],
+          "bestAskQuote": ["0.63", "0.39"],
+          "feeCoefficient": 0.0695,
+          "minimumTradeQty": 5,
+          "gameStartTime": "2026-09-22T23:30:00Z"
+        }
+      ]
+    }
+  ]
+}

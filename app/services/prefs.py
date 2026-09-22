@@ -8,7 +8,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.models import DEFAULT_PREFS, Prefs, utcnow
+from app.models import DEFAULT_PREFS, VENUE_TAKER_FEE, VENUES, Prefs, utcnow
 
 DEVIG_METHODS: frozenset[str] = frozenset({"multiplicative", "additive", "power", "shin"})
 LEAGUES: tuple[str, ...] = ("nfl", "nba", "mlb")
@@ -80,6 +80,7 @@ def update_prefs(session: Session, data: Mapping[str, Any]) -> Prefs:
     """
     cleaned = validate_prefs(data)
     prefs = get_prefs(session)
+    cleaned = _carry_fee_across_venue_change(prefs, cleaned)
     for key, value in cleaned.items():
         setattr(prefs, key, value)
     prefs.updated_at = utcnow()
@@ -87,6 +88,32 @@ def update_prefs(session: Session, data: Mapping[str, Any]) -> Prefs:
     session.commit()
     session.refresh(prefs)
     return prefs
+
+
+def _carry_fee_across_venue_change(prefs: Prefs, cleaned: dict[str, Any]) -> dict[str, Any]:
+    """Moving venue moves the taker fee with it, unless the owner set their own rate.
+
+    The two exchanges charge different coefficients (0.0695 on .us, 0.05 on .com), and a
+    fee left behind at the other venue's number silently mis-prices every edge. Switching
+    venue and then remembering to retype the fee is not a thing anyone does reliably.
+
+    A rate that still equals the *old* venue's published number was never a decision, so
+    it follows the venue. A rate the owner had deliberately set to something else is left
+    exactly as it is -- the per-market `feeCoefficient` the client reads overrides both
+    anyway, so this default only matters where the API gives no rate at all.
+    """
+    new_venue = cleaned.get("venue")
+    if not new_venue or new_venue == prefs.venue:
+        return cleaned
+    old_published = VENUE_TAKER_FEE.get(prefs.venue)
+    new_published = VENUE_TAKER_FEE.get(new_venue)
+    if new_published is None:
+        return cleaned
+    submitted = cleaned.get("taker_fee_rate", prefs.taker_fee_rate)
+    if old_published is not None and submitted == old_published:
+        cleaned = dict(cleaned)
+        cleaned["taker_fee_rate"] = new_published
+    return cleaned
 
 
 def validate_prefs(data: Mapping[str, Any]) -> dict[str, Any]:
@@ -105,6 +132,8 @@ def validate_prefs(data: Mapping[str, Any]) -> dict[str, Any]:
             cleaned[key] = _validate_wallet(key, raw)
         elif key in _KEY_FIELDS:
             cleaned[key] = _validate_api_key(key, raw)
+        elif key == "venue":
+            cleaned[key] = _validate_venue(raw)
         elif key == "devig_method":
             cleaned[key] = _validate_devig(raw)
         elif key == "bookmakers":
@@ -225,6 +254,13 @@ def _validate_wallet(key: str, raw: Any) -> str:
     if not WALLET_RE.match(value):
         raise ValueError(f"{key} must be a 0x address of 40 hex characters, got '{value}'")
     return value.lower()
+
+
+def _validate_venue(raw: Any) -> str:
+    value = str(raw or "").strip().lower()
+    if value not in VENUES:
+        raise ValueError(f"venue must be one of {', '.join(VENUES)}, got '{raw}'")
+    return value
 
 
 def _validate_devig(raw: Any) -> str:

@@ -52,6 +52,12 @@ class Settings(BaseSettings):
     secret_key: SecretStr = SecretStr(DEFAULT_SECRET_KEY)
     database_url: str = "sqlite:///./data/app.db"
     odds_api_key: SecretStr = SecretStr("")
+    # Polymarket US programmatic access. The key id is a UUID and the secret is the
+    # Ed25519 private key, shown once when the owner creates it at polymarket.us/developer
+    # after identity verification. Both empty (the default) means the importer stays off.
+    # SecretStr so neither can reach a log through a repr of this object.
+    pm_us_api_key: SecretStr = SecretStr("")
+    pm_us_api_secret: SecretStr = SecretStr("")
     # Name of the proxy header that carries the real client address (Fly.io:
     # "fly-client-ip"). Empty (the default) means: trust nothing but the socket peer.
     # Any value here is attacker-controlled off a proxy that sets it, so it stays opt-in.
@@ -121,6 +127,19 @@ class Settings(BaseSettings):
     @property
     def odds_api_key_value(self) -> str:
         return secret_value(self.odds_api_key)
+
+    @property
+    def pm_us_api_key_value(self) -> str:
+        return secret_value(self.pm_us_api_key)
+
+    @property
+    def pm_us_api_secret_value(self) -> str:
+        return secret_value(self.pm_us_api_secret)
+
+    @property
+    def pm_us_configured(self) -> bool:
+        """Both halves present. One without the other cannot sign anything."""
+        return bool(self.pm_us_api_key_value and self.pm_us_api_secret_value)
 
     @property
     def auth_enabled(self) -> bool:

@@ -1,6 +1,24 @@
 # CHANGELOG
 
 ## Unreleased — v1 build (2026-09-18)
+- `app/services/us_import.py`: translates .us activity rows into the ledger's existing
+  `Fill`, so both feeds share one set of rules about what becomes a bet. Uses `isAggressor`
+  for real maker/taker (a maker pays no fee, which .com could never tell), and **refuses any
+  row that will not say which outcome it was on** rather than attaching it to a side.
+- `app/clients/polymarket_us_private.py`: Ed25519-signed reads of the owner's own .us
+  activity feed, behind `PM_US_API_KEY` / `PM_US_API_SECRET` in `.env` (both `SecretStr`,
+  both absent by default, importer off). Read-only by construction -- the module has no
+  code that places, cancels or sizes an order. Adds `cryptography`, checked for win_amd64
+  wheels before adding it.
+- `app/clients/polymarket_us.py`: keyless Polymarket US market data emitting the existing
+  `PmMarket`, so matching and the edge math work unchanged. Reads the per-market
+  `feeCoefficient` (0.0695), maps full-game winner/total, and **refuses every .us spread**
+  because its title, question and outcomes disagree about which team each side is -- a
+  wrong answer there recommends the opposite team. Refusals surface on Diagnostics.
+- `venue` preference (Polymarket US / Polymarket) owning the taker fee: .us charges 0.0695,
+  .com 0.05, and a fee left at the wrong one's number overstates every edge. Switching
+  venue carries an untouched fee with it; a rate the owner chose is left alone. Settings
+  warns on a mismatch, and databases written before the preference are corrected once.
 
 ### The paid scan is its own task (2026-09-21)
 - **The hourly task no longer spends credits.** `forward-scan.cmd` runs `--kind poly`

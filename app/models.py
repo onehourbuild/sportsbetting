@@ -47,12 +47,37 @@ DEFAULT_BOOK_WEIGHTS: dict[str, float] = {
 }
 DEFAULT_LEAGUES: list[str] = ["nfl", "nba", "mlb"]
 
+# Polymarket ships two exchanges, and they do not charge the same. polymarket.com blocks
+# US residents from trading and shows an interstitial pointing at polymarket.us, which is
+# the US-regulated product; its taker fee coefficient is 0.0695, verified across all 814
+# markets of one NFL game on 2026-09-21, against 0.05 on .com.
+#
+# The fee is not cosmetic. `docs/DECISIONS.md` records that a fee set too low manufactures
+# edges that are not there, and 0.05 on a .us account is exactly that: at a 50c price it
+# understates the cost by half a cent a share, which is most of a 2% edge. So the venue
+# owns the fee default rather than leaving one number to be remembered.
+VENUES: tuple[str, ...] = ("polymarket_us", "polymarket_com")
+VENUE_TAKER_FEE: dict[str, float] = {
+    "polymarket_us": 0.0695,
+    "polymarket_com": 0.05,
+}
+VENUE_LABELS: dict[str, str] = {
+    "polymarket_us": "Polymarket US (regulated, US residents)",
+    "polymarket_com": "Polymarket (rest of world)",
+}
+# Default to .com because that is the exchange the market-data client actually reads
+# today. A default of .us would price against .com data while claiming .us fees, which is
+# a worse lie than the one it fixes. Flip this when the .us client lands; a US owner picks
+# .us in Settings meanwhile, and the fee follows the venue automatically.
+DEFAULT_VENUE = "polymarket_com"
+
 DEFAULT_PREFS: dict[str, Any] = {
     "bankroll": 1000.0,
     "kelly_fraction": 0.25,
     "max_stake_pct": 2.0,
     "min_edge": 0.02,
-    "taker_fee_rate": 0.05,
+    "venue": DEFAULT_VENUE,
+    "taker_fee_rate": VENUE_TAKER_FEE[DEFAULT_VENUE],
     "devig_method": "power",
     "bookmakers": list(DEFAULT_BOOKMAKERS),
     "book_weights": dict(DEFAULT_BOOK_WEIGHTS),
@@ -451,7 +476,10 @@ class Prefs(Base):
     kelly_fraction: Mapped[float] = mapped_column(Float, nullable=False, default=0.25)
     max_stake_pct: Mapped[float] = mapped_column(Float, nullable=False, default=2.0)
     min_edge: Mapped[float] = mapped_column(Float, nullable=False, default=0.02)
-    taker_fee_rate: Mapped[float] = mapped_column(Float, nullable=False, default=0.05)
+    venue: Mapped[str] = mapped_column(String(20), nullable=False, default=DEFAULT_VENUE)
+    taker_fee_rate: Mapped[float] = mapped_column(
+        Float, nullable=False, default=VENUE_TAKER_FEE[DEFAULT_VENUE]
+    )
     devig_method: Mapped[str] = mapped_column(String(16), nullable=False, default="power")
     bookmakers: Mapped[list] = mapped_column(
         JSON, nullable=False, default=lambda: list(DEFAULT_BOOKMAKERS)

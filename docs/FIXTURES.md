@@ -56,3 +56,22 @@ before it (imported, then settled lost by the next scan), a market the slate doe
 contain, an asset that is not one of the market's tokens, and a row with no price.
 Condition ids and token ids match `gamma_events_nfl.json` / `gamma_events_mlb.json`.
 
+
+
+## `polymarket_us_events_nfl.json`
+
+Polymarket US `/v1/events`, shaped from responses read off the owner's machine on
+2026-09-21. Two events (one NFL, one NBA) so league selection is exercised, and five NFL
+markets chosen to cover each outcome of the parser:
+
+| Market | What it tests |
+|---|---|
+| `...-winner` | a full-game moneyline that parses, both outcomes resolving to the event's teams |
+| `...-total-47pt5` | a full-game total that parses, with its line and Over/Under labels |
+| `...-pos-6pt5` | the spread that is **refused**: titled "Rams wins by over 6.5", asking "Will the Giants cover 6.5", with outcomes `["-6.50","+6.50"]` |
+| `...-2h-pos-3pt5` | a second-half line, skipped as not a full-game market |
+| `...-anytime-td-nacua` | a player prop, skipped the same way |
+
+Every market carries `feeCoefficient: 0.0695`, which is the .us rate and the reason the
+venue preference exists. Two of the five parse; the other three are reported with reasons
+rather than dropped.

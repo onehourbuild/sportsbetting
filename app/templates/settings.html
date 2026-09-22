@@ -32,8 +32,19 @@
       <input name="max_stake_pct" inputmode="decimal" value="{{ values.max_stake_pct }}" required></label>
     <label class="field"><span>Minimum edge (e.g. 0.02 = 2%)</span>
       <input name="min_edge" inputmode="decimal" value="{{ values.min_edge }}" required></label>
-    <label class="field"><span>Taker fee rate (Polymarket sports: 0.05)</span>
+    <label class="field"><span>Where you trade</span>
+      <select name="venue">
+        {% for key, label in venue_labels.items() %}
+        <option value="{{ key }}"{% if values.venue == key %} selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select></label>
+    <label class="field"><span>Taker fee rate ({{ venue_fee_hint }})</span>
       <input name="taker_fee_rate" inputmode="decimal" value="{{ values.taker_fee_rate }}" required></label>
+    {% if venue_fee_mismatch %}
+    <p class="muted small"><strong>Check this.</strong> {{ venue_labels[values.venue] }} charges
+      {{ venue_fee_expected }}, but the fee above is {{ values.taker_fee_rate }}. A fee set too
+      low reports edges that are not there. Changing the venue above resets it.</p>
+    {% endif %}
     <label class="field"><span>Minimum market liquidity (USD)</span>
       <input name="min_liquidity_usd" inputmode="decimal" value="{{ values.min_liquidity_usd }}" required></label>
   </section>
