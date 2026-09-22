@@ -50,7 +50,7 @@ real at a size where being wrong is cheap. Settings that match that bankroll:
 At these settings a typical suggestion lands around **$4–5**. `MIN_STAKE` is $1.00, so
 Kelly-sized bets clear the floor — but note that on a high-priced contract (say $0.85) a
 5-share Polymarket minimum is $4.25, which brushes the $5.00 cap. Expect occasional
-"below the minimum order size" notes on expensive favourites. That is the sizing logic
+"below the minimum order size" notes on expensive favorites. That is the sizing logic
 working, not a bug.
 
 **Timeline honesty:** CLV over ~100 bets is the only trustworthy read, and at a realistic

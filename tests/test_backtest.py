@@ -449,7 +449,7 @@ def test_paired_report_drops_prices_that_cannot_be_the_same_moment(db_session: S
     assert kept["paired"] is True
 
 
-def test_paired_filter_removes_the_artefact_it_was_built_for(db_session: Session) -> None:
+def test_paired_filter_removes_the_artifact_it_was_built_for(db_session: Session) -> None:
     """The live NFL case: unpaired, the 90-99c band read as the only significant result in
     the table (p=0.003). Every one of those rows was a one-sided close."""
     for i in range(40):  # clean, correctly-priced pairs
@@ -471,7 +471,7 @@ def test_paired_filter_removes_the_artefact_it_was_built_for(db_session: Session
     db_session.flush()
 
     unpaired = next(b for b in backtest.report(db_session)["bands"] if b["low"] == 0.90)
-    assert unpaired["significant"] is True  # the artefact
+    assert unpaired["significant"] is True  # the artifact
 
     paired = next(b for b in backtest.report(db_session, paired=True)["bands"] if b["low"] == 0.90)
     assert paired["n"] == 40

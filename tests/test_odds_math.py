@@ -195,7 +195,7 @@ class TestDevigContractVectors:
         assert sum(result) == pytest.approx(1.0, abs=SUM_TOL)
 
     def test_three_way_shin_differs_from_additive(self) -> None:
-        # The two-way coincidence must not be an artefact of the implementation.
+        # The two-way coincidence must not be an artifact of the implementation.
         raw = _raw(THREE_WAY_ODDS)
         assert shin_devig(raw) != pytest.approx(additive_devig(raw), abs=1e-4)
 

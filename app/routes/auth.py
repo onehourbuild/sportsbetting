@@ -107,7 +107,7 @@ _default_limiter = LoginLimiter()
 
 
 def sanitize_ip(value: str) -> str | None:
-    """Normalised address text from an untrusted header, or None when it is not an IP.
+    """Normalized address text from an untrusted header, or None when it is not an IP.
 
     The result ends up in a WARNING log line and as a key in the limiter's dictionaries,
     so nothing that is not an address may reach either: no newlines to forge log lines

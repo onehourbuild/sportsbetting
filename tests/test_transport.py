@@ -1,4 +1,4 @@
-"""FixtureTransport routing/recording and HttpTransport retry behaviour (httpx.MockTransport)."""
+"""FixtureTransport routing/recording and HttpTransport retry behavior (httpx.MockTransport)."""
 
 from __future__ import annotations
 

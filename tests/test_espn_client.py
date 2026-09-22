@@ -436,7 +436,7 @@ def test_to_book_games_uses_provider_name_as_title_and_blank_keys_become_none() 
         ("Buffalo Bills", None),
         ("Kansas City Chiefs", "KC"),
     }
-    # the favourite named in details is still placed by its key
+    # the favorite named in details is still placed by its key
     assert {(o.name, o.point) for o in market(bg, "spreads").outcomes} == {
         ("Kansas City Chiefs", -3.5),
         ("Buffalo Bills", 3.5),
@@ -793,7 +793,7 @@ def test_nested_payload_without_prices_contributes_nothing() -> None:
     assert EspnClient.to_book_games(client.scoreboard("mlb", date(2026, 9, 18))) == []
 
 
-def test_user_agent_names_a_recognised_http_client() -> None:
+def test_user_agent_names_a_recognized_http_client() -> None:
     """ESPN's edge 403s a bare custom User-Agent (verified live 2026-09-18). Leading with
     the real httpx token is what gets the request served; the app still identifies itself."""
     assert USER_AGENT.startswith("python-httpx/")

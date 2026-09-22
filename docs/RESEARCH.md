@@ -180,7 +180,7 @@ Base: `https://api.the-odds-api.com/v4`
     back to those two fields and, when nothing in the payload says the market is tradable
     (and it is not closed), reports it as unparseable with the distinct reason
     "acceptingOrders missing (enableOrderBook/active off)" so the payload change is
-    recognisable on Diagnostics instead of hiding in the generic
+    recognizable on Diagnostics instead of hiding in the generic
     "market not accepting orders" list.
 18. Whether an event's `startDate` ever equals kickoff. It is generally the listing /
     creation timestamp, so it is NOT used as a `game_start` fallback any more: a market
@@ -215,10 +215,10 @@ responses, and they supersede the matching "Unverified" entries.
   docs state a 0.05 coefficient for sports. The unit remains unverified and the two
   disagree. Left as-is deliberately: too high a fee understates edge, which can only hide
   an opportunity, never invent one. Every override is on Diagnostics.
-- **ESPN requires a recognised HTTP-client User-Agent** (new, item 20 below).
+- **ESPN requires a recognized HTTP-client User-Agent** (new, item 20 below).
 - **ESPN's odds block moved** (new, item 21 below) — items 12 and 19 are superseded.
 - **NBA out of season** (mid-September): 509 events, every one a future or novelty market,
-  so zero game markets. Correct behaviour, but worth knowing before calling it a bug.
+  so zero game markets. Correct behavior, but worth knowing before calling it a bug.
 
 20. `site.api.espn.com` returns `403 Access Denied` for a custom User-Agent and serves
     requests naming a known client (`curl/…`, `python-httpx/…`, `python-requests/…`,

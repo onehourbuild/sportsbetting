@@ -16,7 +16,7 @@ import httpx
 
 log = logging.getLogger(__name__)
 
-# ESPN's edge (site.api.espn.com) allowlists User-Agents that name a recognised HTTP
+# ESPN's edge (site.api.espn.com) allowlists User-Agents that name a recognized HTTP
 # client and 403s anything else: "polymarket-edge-finder/0.1" was refused on every
 # request while "curl/8.4.0", "python-requests/..." and "python-httpx/..." were served.
 # Leading with the real client token gets us served without pretending to be a browser,

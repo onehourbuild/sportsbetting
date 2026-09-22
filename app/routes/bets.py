@@ -335,7 +335,7 @@ async def bet_create(
     if row is None:
         # The form posts into #sheet-body; sheet_message.html is a whole sheet (backdrop +
         # role=dialog + #sheet-title), so it must replace #sheet or the page ends up with
-        # two dialogs, two backdrops and a duplicate id that breaks aria-labelledby.
+        # two dialogs, two backdrops and a duplicate id that breaks aria-labeledby.
         return _sheet_message(
             request,
             "Opportunity not found",

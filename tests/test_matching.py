@@ -100,7 +100,7 @@ def _is_stub(fn, *args) -> bool:
         fn(*args)
     except NotImplementedError:
         return True
-    except Exception:  # noqa: BLE001 - any other behaviour means it is implemented
+    except Exception:  # noqa: BLE001 - any other behavior means it is implemented
         return False
     return False
 

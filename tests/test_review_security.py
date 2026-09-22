@@ -155,7 +155,7 @@ def test_a_configured_proxy_header_is_honoured_and_sanitised(
     settings = _dev_settings(
         tmp_path, app_password=TEST_PASSWORD, trusted_proxy_header="Fly-Client-IP"
     )
-    assert settings.trusted_proxy_header == "fly-client-ip"  # normalised
+    assert settings.trusted_proxy_header == "fly-client-ip"  # normalized
     with TestClient(create_app(settings)) as client:
 
         def attempt(ip: str) -> int:

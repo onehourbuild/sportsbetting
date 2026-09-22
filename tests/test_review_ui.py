@@ -639,7 +639,7 @@ def test_ios_status_bar_is_readable_in_light_mode() -> None:
     base = BASE_HTML.read_text(encoding="utf-8")
     assert '<meta name="apple-mobile-web-app-status-bar-style" content="default">' in base
     assert 'content="black-translucent"' not in base
-    # "default" delegates the colour to these, which already have both themes
+    # "default" delegates the color to these, which already have both themes
     assert 'name="theme-color" media="(prefers-color-scheme: light)"' in base
     assert 'name="theme-color" media="(prefers-color-scheme: dark)"' in base
 

@@ -190,7 +190,7 @@ Read the limits before you read the numbers:
 
 - It does **not** test this app's strategy. That needs historical sportsbook lines, which
   are paid data (The Odds API keeps them back to June 2020; ESPN drops odds from finished
-  games). What it tests is whether Polymarket's own price is calibrated — if 60c favourites
+  games). What it tests is whether Polymarket's own price is calibrated — if 60c favorites
   win 60% of the time there is no free money in the price, and if a band wins more often
   than it costs, that is an edge needing no book at all.
 - **There is no five-year history.** Polymarket's per-game sports markets start Oct 2023

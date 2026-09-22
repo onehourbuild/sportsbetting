@@ -4,7 +4,7 @@
 environment markers. Generated on Linux, that produced a lock which pinned `uvloop`
 unconditionally -- a package with Linux and macOS wheels only, whose setup.py raises
 "uvloop does not support Windows at the moment" -- and which omitted `colorama`, which
-uvicorn needs for coloured output on Windows and nowhere else.
+uvicorn needs for colored output on Windows and nowhere else.
 
 The first of those failed the install on a real Windows desktop. The second would have
 been a quieter wrong-looking console afterwards.
@@ -74,7 +74,7 @@ def test_windows_only_dependencies_survived_the_resolve() -> None:
     marker = _pins().get("colorama")
     assert marker is not None, (
         "colorama is missing from the lock, which means the resolve was not universal: "
-        "uvicorn needs it for coloured output on Windows, and a Linux-only resolve drops it."
+        "uvicorn needs it for colored output on Windows, and a Linux-only resolve drops it."
     )
     assert "sys_platform == 'win32'" in marker, (
         f"colorama should be pinned for Windows only; its marker is {marker!r}"
