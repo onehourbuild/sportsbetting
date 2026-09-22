@@ -20,7 +20,12 @@ _FLOAT_RANGES: dict[str, tuple[float, float, bool, bool]] = {
     "bankroll": (0.0, float("inf"), False, False),
     "kelly_fraction": (0.0, 1.0, False, True),
     "max_stake_pct": (0.0, 100.0, False, True),
-    "min_edge": (0.0, 0.5, True, False),
+    # Negative is allowed on purpose. With ESPN as the only book nothing clears 0 -- the
+    # whole live slate sits between -1% and -5% -- so a floor of 0 means the Edges page can
+    # only ever be empty, and "show me the best available anyway" has no way to be asked
+    # for. A negative threshold lists those rows and Kelly still sizes them at $0, so the
+    # app shows the candidates without ever recommending a stake on one.
+    "min_edge": (-0.25, 0.5, True, False),
     "taker_fee_rate": (0.0, 0.2, True, False),
     "match_window_hours": (0.0, 24.0 * 14, False, True),
     "min_liquidity_usd": (0.0, float("inf"), True, False),
@@ -28,11 +33,32 @@ _FLOAT_RANGES: dict[str, tuple[float, float, bool, bool]] = {
 _INT_RANGES: dict[str, tuple[int, int]] = {
     "stale_book_minutes": (0, 60 * 24 * 30),
 }
-_BOOL_FIELDS: frozenset[str] = frozenset({"espn_fallback_enabled"})
+_BOOL_FIELDS: frozenset[str] = frozenset({"espn_fallback_enabled", "use_market_fee"})
 _WALLET_FIELDS: frozenset[str] = frozenset({"pm_wallet"})
 # An Ethereum-style address: Polymarket's proxy wallets are ordinary 20-byte addresses.
 WALLET_RE = re.compile(r"^0[xX][0-9a-fA-F]{40}$")
+_KEY_FIELDS: frozenset[str] = frozenset({"odds_api_key"})
+# The Odds API issues 32 hex characters; the band is wide enough to survive a format change
+# but tight enough to reject a pasted URL, an email or a whole "your key is: ..." line.
+API_KEY_RE = re.compile(r"^[A-Za-z0-9]{16,64}$")
 _KNOWN_FIELDS: frozenset[str] = frozenset(DEFAULT_PREFS)
+
+
+def odds_api_key_for(settings: Any, prefs: Any) -> str:
+    """The Odds API key to use: `.env` first, then the one saved in Settings.
+
+    The env value wins deliberately. A deployment that was given a key on the command line
+    should not be repointable by anyone who can reach the Settings page -- and this app is
+    shared with a link and one password. The Settings field exists so the owner can paste a
+    key without editing a file and restarting, which is the only reason the app has been
+    running ESPN-only.
+    """
+    env_key = getattr(settings, "odds_api_key_value", None)
+    env_value = env_key() if callable(env_key) else getattr(settings, "odds_api_key", "")
+    env_value = str(env_value or "").strip()
+    if env_value:
+        return env_value
+    return str(getattr(prefs, "odds_api_key", "") or "").strip()
 
 
 def get_prefs(session: Session) -> Prefs:
@@ -77,6 +103,8 @@ def validate_prefs(data: Mapping[str, Any]) -> dict[str, Any]:
             cleaned[key] = _validate_bool(key, raw)
         elif key in _WALLET_FIELDS:
             cleaned[key] = _validate_wallet(key, raw)
+        elif key in _KEY_FIELDS:
+            cleaned[key] = _validate_api_key(key, raw)
         elif key == "devig_method":
             cleaned[key] = _validate_devig(raw)
         elif key == "bookmakers":
@@ -163,6 +191,26 @@ def _validate_bool(key: str, raw: Any) -> bool:
         if text in {"0", "false", "no", "off", "n", ""}:
             return False
     raise ValueError(f"{key} must be true or false, got '{raw}'")
+
+
+def _validate_api_key(key: str, raw: Any) -> str:
+    """An API key, or "" to clear it. Whitespace is stripped because it is pasted.
+
+    Rejecting a malformed key here rather than at the first request matters: a bad key does
+    not raise, it just makes every book refresh fall back to ESPN, which looks exactly like
+    having no key at all and is how a typo costs a week.
+    """
+    if raw is None:
+        return ""
+    if not isinstance(raw, str):
+        raise ValueError(f"{key} must be text")
+    value = raw.strip()
+    if value and not API_KEY_RE.match(value):
+        raise ValueError(
+            f"{key} must be 16-64 letters and digits (paste just the key, not a URL or a "
+            f"whole sentence), got {len(value)} characters"
+        )
+    return value
 
 
 def _validate_wallet(key: str, raw: Any) -> str:

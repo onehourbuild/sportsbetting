@@ -15,7 +15,7 @@
     <span class="stat-value">{% if books_cost is not none %}{{ books_cost }} credits{% else %}—{% endif %}</span></div>
   <div class="stat"><span class="stat-label">DEMO_MODE</span>
     <span class="stat-value">{% if demo_mode %}<span class="badge badge-info">on</span>{% else %}<span class="badge">off</span>{% endif %}</span></div>
-  {% if not has_odds_key %}<p class="muted small">Without an Odds API key, Books refreshes use the ESPN scoreboard as a single low-weight book. Add <code>ODDS_API_KEY</code> to <code>.env</code> and restart.</p>{% endif %}
+  {% if not has_odds_key %}<p class="muted small">Without an Odds API key, Books refreshes use the ESPN scoreboard as a single low-weight book, and with one book almost nothing clears a positive edge. Paste a key below, or set <code>ODDS_API_KEY</code> in <code>.env</code>.</p>{% endif %}
 </section>
 
 {% if saved %}<p class="alert alert-ok" role="status">Saved.</p>{% endif %}
@@ -49,6 +49,7 @@
     <label class="field"><span>Book weights (one <code>bookmaker=weight</code> per line; 0 excludes)</span>
       <textarea name="book_weights" rows="7" autocapitalize="off" autocorrect="off" spellcheck="false">{{ values.book_weights }}</textarea></label>
     <label class="check"><input type="checkbox" name="espn_fallback_enabled"{% if values.espn_fallback_enabled %} checked{% endif %}> <span>ESPN scoreboard fallback when no Odds API key / credits</span></label>
+    <label class="check"><input type="checkbox" name="use_market_fee"{% if values.use_market_fee %} checked{% endif %}> <span>Use Polymarket's own per-market fee (uncheck on polymarket.us, which charges a different rate)</span></label>
     <label class="field"><span>Match window (hours between Polymarket and book start times)</span>
       <input name="match_window_hours" inputmode="decimal" value="{{ values.match_window_hours }}" required></label>
     <label class="field"><span>Book snapshot considered stale after (minutes)</span>
@@ -62,6 +63,18 @@
       <label class="check"><input type="checkbox" name="leagues_enabled" value="{{ league }}"{% if league in values.leagues_enabled %} checked{% endif %}> <span>{{ league|upper }}</span></label>
       {% endfor %}
     </div>
+  </section>
+
+  <section class="card">
+    <h2 class="sub">Odds API key</h2>
+    <label>Key
+      <input type="password" name="odds_api_key" autocomplete="off" spellcheck="false"
+             placeholder="{{ values.odds_api_key_hint or 'paste your key' }}">
+    </label>
+    <p class="muted small">Takes effect on the next scan, no restart.
+      {%- if values.odds_api_key_hint %} Currently {{ values.odds_api_key_hint }}; leave blank to keep it.{% endif %}
+      A key in <code>.env</code> wins over this one.</p>
+    {% if values.odds_api_key_hint %}<label class="check"><input type="checkbox" name="odds_api_key_clear"> <span>Remove the saved key</span></label>{% endif %}
   </section>
 
   <section class="card">

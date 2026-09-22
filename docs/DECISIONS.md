@@ -9,7 +9,7 @@ pinned `uvloop` unconditionally - a package that ships Linux and macOS wheels
 only, and whose setup.py raises "uvloop does not support Windows at the moment"
 - so pip fell through to building it from source and the Windows install died
 there. The same resolve also silently dropped `colorama`, which uvicorn needs
-for coloured output on Windows and nowhere else.
+for colored output on Windows and nowhere else.
 
 `make lock` now passes `--universal`, so markers are preserved: uvloop carries
 `sys_platform != 'win32'` and colorama carries `sys_platform == 'win32'`.
@@ -368,7 +368,7 @@ book snapshot and reported the difference as a huge edge. `_scan_league` now ski
 lists under `Scan.notes.unmatched` with the reason (`market closed`, `market not accepting
 orders`, `game started`), every market that is closed, not accepting orders, or whose
 `gameStartTime` is at or before `now`; a matched book game whose `commence_time` has
-passed is treated the same. `build_opportunity` applies the same guards as defence in
+passed is treated the same. `build_opportunity` applies the same guards as defense in
 depth. Live quotes are still stored (the ledger's mark needs them), just never priced.
 
 ## 2026-09-18 — Review round: the limit price must be able to rest
@@ -388,7 +388,7 @@ now stores `fill_complete` and `fill_usd` (the fee-inclusive dollars the stored 
 absorb at `fill_price`), the cards and the game page flag a partial fill, and the bet
 form prefills the fillable amount rather than the Kelly stake. The unrealized mark on an
 open bet subtracts the taker fee a sale at the bid would pay (`shares * rate * bid *
-(1 - bid)`, rate implied from the bet's own fee, else the preference) and is labelled
+(1 - bid)`, rate implied from the bet's own fee, else the preference) and is labeled
 "Mark net". Because v1 has no Alembic, `init_db` now appends model columns missing from
 an existing table with `ALTER TABLE ... ADD COLUMN` (boolean defaults as `TRUE`/`FALSE`,
 which SQLite >= 3.23 and PostgreSQL both accept); it never drops or retypes.
@@ -475,7 +475,7 @@ Server toasts swap into the persistent `#toast` live region with `hx-swap-oob="i
 (a `<span class="toast-msg" data-error>`), which `app.js` un-hides before the swap and
 tones afterwards, because replacing the region node is not announced by screen readers.
 The edge/bet card title link, the back link and `<details>` summaries are 44 px tall; the
-NBA badge colour is a token with a light-mode value; the ledger tiles go to two columns
+NBA badge color is a token with a light-mode value; the ledger tiles go to two columns
 under 420 px and never break inside a number; the bottom sheet locks page scrolling
 (`body.sheet-open`, `overscroll-behavior: contain`); the Edges topbar is re-rendered
 out-of-band with every scan result; `theme-color` has light and dark variants; money,
@@ -522,7 +522,7 @@ inside a number. The toast is `pointer-events: none` and moves to the top of the
 while a sheet is open — it used to sit exactly over the sheet's "Log bet" button and
 swallow taps there for the six seconds an error toast is shown.
 `apple-mobile-web-app-status-bar-style` is `default` rather than `black-translucent`, which
-painted white status-bar text over the near-white light-mode topbar; iOS now colours the
+painted white status-bar text over the near-white light-mode topbar; iOS now colors the
 bar from the `theme-color` metas. `viewport-fit=cover` was set but only the top and bottom
 insets were honoured, so in landscape on a notched iPhone the nav items, brand, chips and
 card edges sat under the notch: `.page`, `.topbar`, `.sheet-panel` and `.login-body` use
@@ -530,7 +530,7 @@ card edges sat under the notch: `.page`, `.topbar`, `.sheet-panel` and `.login-b
 A vanished opportunity now answers `POST /bets` with `HX-Retarget: #sheet` +
 `HX-Reswap: innerHTML` instead of nesting a second `role="dialog"` and a duplicate
 `#sheet-title` inside the open sheet. Settled-bet P&L and the ledger P&L tile use
-`usd_signed`, so a $4.50 profit and a $4.50 stake no longer differ only by colour.
+`usd_signed`, so a $4.50 profit and a $4.50 stake no longer differ only by color.
 
 ## 2026-09-18 — Review round 2: the request clock is injectable
 `routes/edges.get_now()` is a dependency returning `datetime.now(UTC)`, threaded through
@@ -597,7 +597,7 @@ store quotes for everything, price nothing, and fill Diagnostics with one indist
 reason. `_accepting_orders` now falls back to `enableOrderBook`, then `active`. When
 nothing in the payload says the market is tradable and it is not closed, it is reported as
 unparseable with the distinct reason **"acceptingOrders missing (enableOrderBook/active
-off)"**, so the payload change is recognisable on Diagnostics instead of hiding behind the
+off)"**, so the payload change is recognizable on Diagnostics instead of hiding behind the
 scan's generic "market not accepting orders". Closed markets are kept whatever the flags
 say, because `market()` re-reads them for settlement.
 
@@ -753,7 +753,7 @@ only what the app advised, the log-bet form still opens at the smallest placeabl
 Polymarket resolves a cancelled or postponed game with `outcomePrices ["0.5","0.5"]`, which
 is neither `["1","0"]` nor `["0","1"]`, so the bet never settled; voiding it by hand then
 recorded P&L 0 when a push actually pays $0.50 a share — a taker at 0.57 with a $10 stake
-(17.174606 shares) is **-$1.41**. `bets.is_push(market)` recognises it, `settle_open_bets`
+(17.174606 shares) is **-$1.41**. `bets.is_push(market)` recognizes it, `settle_open_bets`
 settles those as `"push"` leaving `Market.resolved_outcome` NULL (there is no winning side),
 and `settle_bet_manual` accepts a fourth result `push` (`pnl = 0.5*shares - stake_usd`).
 `void` keeps its meaning: an order that never filled, P&L 0, counted in neither
@@ -804,7 +804,7 @@ together they were the difference between a working app and an empty Edges page.
 `polymarket-edge-finder/0.1 (+personal tool)` came back `403 Access Denied`; so did a
 browser string and an empty one. `curl/8.4.0`, `python-requests/2.31.0`, `okhttp/4.9.0`,
 `Go-http-client/2.0` and `python-httpx/0.28.1` were all served. The rule is evidently "name
-a recognised HTTP client", not "do not look like a bot", so `transport.USER_AGENT` now leads
+a recognized HTTP client", not "do not look like a bot", so `transport.USER_AGENT` now leads
 with the real httpx token and keeps the app's own name after it:
 `python-httpx/<version> polymarket-edge-finder/0.1 (+personal tool)`. That is honest — it is
 genuinely httpx — and it avoids impersonating a browser, which the earlier note asked for.
@@ -861,7 +861,7 @@ is the edge list and there was no games index, so with one low-weight book the o
 empty screen, no way in to the 232 games and 3,613 markets the scan had actually stored,
 and no reason to believe anything worked. A list page with league chips, market counts, a
 "no book line" marker and an upcoming/started split fixes that. Started games are shown
-separately and labelled rather than hidden, because they are exactly the ones that are no
+separately and labeled rather than hidden, because they are exactly the ones that are no
 longer priceable.
 
 **3. `historical_samples` — the back test, and what it can honestly claim.** The obvious
@@ -875,7 +875,7 @@ and `backtest.harvest` rebuilds each market's last **pre-kickoff** traded price 
 What that cannot do is test the app's actual strategy: historical book lines are paid data
 (The Odds API keeps them back to June 2020), so there is no historical fair value and no
 historical edge. What it does instead is test the assumption underneath — whether
-Polymarket's own price is well calibrated. If 60c favourites win 60% of the time there is
+Polymarket's own price is well calibrated. If 60c favorites win 60% of the time there is
 no free money in the price and any edge must come from the books; if a band wins more often
 than it costs, that is an edge needing no book data at all. Trades after kickoff are
 dropped rather than used as a fallback, and a "close" more than 12 hours stale is excluded
@@ -885,10 +885,10 @@ Coverage ceiling, worth stating because it was asked for directly: Polymarket's 
 sports markets begin **Oct 2023 (NFL), Dec 2023 (NBA), Aug 2024 (MLB)**. A five-year back
 test is not expensive, it is impossible — the data does not exist.
 
-## 2026-09-18 — The back test's only "significant" result was an artefact
+## 2026-09-18 — The back test's only "significant" result was an artifact
 The first full NFL harvest (6,522 graded outcomes, two seasons) produced exactly one band
-under p<0.05: 90-99c heavy favourites, implied 93.5% against an actual 85.7%, p=0.003.
-Taken at face value that is a standing instruction to fade heavy favourites.
+under p<0.05: 90-99c heavy favorites, implied 93.5% against an actual 85.7%, p=0.003.
+Taken at face value that is a standing instruction to fade heavy favorites.
 
 It is not real. Each side's closing price is its *own* last pre-kickoff trade, and an
 illiquid side can last have traded hours before the other, so the two prices are not one
@@ -941,3 +941,129 @@ Choices worth recording:
   commits once at its end, and a rollback in the hook was found (by test) to discard the
   scan's own flushed rows.
 
+
+
+## The forward report's unit is an outcome, not a row (2026-09-21)
+
+The scan runs hourly and records every priceable outcome each time, by design: that is what
+makes the threshold question answerable after the fact. It also means a game that stays
+open all day leaves a dozen rows that are the same position, an hour apart, at almost the
+same price. Treating those as independent bets is not a rounding error — it multiplies both
+n and any run of luck by however many times the scan happened to see the game.
+
+It produced a concrete false result. Three days of live data reported **+47% ROI on 13
+bets** at a 1% threshold. Eleven of those 13 were one outcome at 62c, recorded once an
+hour; the real count was three bets, and at the app's own 2% threshold, none.
+
+So the report groups by `token` and keeps the **first** sample that cleared the threshold —
+the moment a bettor watching that feed would have bought. Keeping the last would price the
+bet at information it did not have; keeping the best would be choosing the entry after
+seeing the result. The threshold is applied before the grouping, not after, so each
+threshold gets its own entry price for the same outcome.
+
+This is the second false positive in this project from the same mistake, after the closing
+-price artifact that `--paired` fixes. Both came from counting rows that were not
+independent observations. The rule that catches both: before reporting an n, say what one
+unit of it is and check the data cannot contain the same unit twice.
+
+
+## The bake-off has to try to disprove itself (2026-09-21)
+
+Asked which betting rule would have made money, the tempting answer is to score twenty-odd
+rules and report the best one. That procedure returns a winner from pure noise essentially
+every time, and it would have here: the best rule of 28 came in at +2.90% per dollar.
+
+So two things are built into the run rather than left to whoever reads it.
+
+**A permutation null over the whole search.** Results are shuffled among outcomes priced
+within 2c of each other, which leaves the market exactly as well calibrated as it really
+was while severing any link between a rule's other criteria and the result. All 28 rules
+are re-scored, the best is recorded, and that repeats 300 times. On this data the best rule
+on shuffled results is typically +0.91% and reaches +4.42% one run in twenty, so the real
++2.90% has a search p of 0.130. It is what this many rules produce from nothing.
+
+The null is deliberately blind to one thing: an edge that is purely about price level -- "the
+market is wrong at 55c" -- survives the shuffle untouched, because the shuffle preserves it.
+That question is the `calib_p` column's, and `backtest.report` already answers it band by
+band. Two different claims, two different tests; a test pinning this limitation is in
+`tests/test_strategies.py` so it is not rediscovered as a bug.
+
+**A holdout.** Each league's history is cut at its own median kickoff, rules ranked on the
+early half and re-scored unchanged on the late half. Every rule that looked good early
+reversed: the best went +8.97% to -2.92%, and the spread rule that made +6.95% early lost
+16.37% late.
+
+The finding, such as it is: buying every outcome loses 5.33%, about the spread plus the
+fee, which is the arithmetic check that the rest of the table is real. Underdogs lose much
+more than that (-10.20% over 1,564 picks, p=0.002, winning 35.5% against an implied 37.2%),
+and their mirror image is the only thing resembling an edge -- favorites win about a point
+more often than their price says. That point is worth less than the 6.95% taker fee, so
+`Any favorite` returns +1.50% gross and -1.05% net. The bias is real and too small to sell.
+
+## Read the side off the index, not the name (2026-09-21)
+
+The first bake-off had two spread rules matching on outcome name "Yes" and "No", and they
+found 7 and 15 picks out of 2,654 spread rows. Polymarket writes a spread market as
+"Spread: Cowboys (-7.5)" and names the outcomes after the two teams; only 27 rows use the
+older "Yes"/"No" phrasing. Outcome index 0 is always the named team covering, in both
+phrasings. Keyed on the index the same two rules find 981 picks each and turn into the real
+question -- lay the points or take them -- which is the one the table should have been
+asking. A rule that silently matches almost nothing still prints a row, a return and a p
+value, and at n=7 that return was +43.60%.
+
+
+## Whose fee is it (2026-09-21)
+
+Gamma publishes a per-market `takerBaseFee`, and the app preferred it to
+`prefs.taker_fee_rate` on the reasoning that a live venue's own number beats a setting
+somebody typed. That reasoning is sound for polymarket.com and wrong for this owner, who
+trades polymarket.us: .us charges a 0.0695 coefficient against .com's 0.10, and has no
+Gamma of its own to ask. The effect was that a fee rate set deliberately, after the venue
+was identified, never reached the math -- the app kept costing every bet at .com's rate.
+
+`Prefs.use_market_fee` decides, defaulting to on so .com behavior is unchanged, and
+`edge.resolve_fee_rate` is the one function that reads it. It matters more than half a
+point sounds: on the live slate, switching to the rate actually charged took the candidate
+list from 7 to 25 and the best edge from -0.79% to -0.17%. A fee that is too high hides
+bets; one that is too low invents them. Either way the error is invisible, because both
+produce a plausible-looking number.
+
+The related change is that `min_edge` now accepts negative values. With a single book
+nothing clears zero, so the old floor of 0 made "show me the closest ones anyway"
+unaskable and the Edges page permanently empty. Kelly already clamps a negative edge to a
+zero stake, so a negative threshold lists candidates without ever sizing one -- which is
+exactly the right split between showing and recommending.
+
+
+## A form field outside the form fails perfectly silently (2026-09-21)
+
+The Odds API key field shipped rendered above the `<form>` element. It looked right,
+accepted a pasted key, and was simply not in the POST body. Every other setting saved, so
+`prefs.updated_at` moved and the page said "Saved." Nothing logged an error, because from
+the server's side nothing was wrong: a save arrived without that field, which is also what
+a legitimately blank field looks like.
+
+Seven tests covered the handler and all passed, because they post to `/settings` with the
+field in the payload. They proved the handler works. They could not see the page. The
+guard that closes this is `test_every_settings_input_is_inside_the_settings_form`, which
+reads the rendered HTML, finds the form element, and asserts every input the handler
+consumes falls inside it -- confirmed to fail against the broken layout before being kept.
+
+The second half of the fix is that the server now has a log at all, and logs the field
+*names* of each settings save. Three rounds went into guessing at the browser (service
+worker? HTTP cache? wrong install?) when one line of server output settled it: the first
+three saves carried no `odds_api_key`, the fourth did. The cause was an open tab holding
+pre-fix HTML. None of that was diagnosable from the outside.
+
+## The free tier does not survive an hourly paid scan (2026-09-21)
+
+A `--kind both` run costs 6 Odds API credits; the free tier is 500 a month. The hourly task
+ran `both`, and its own comment said it cost nothing -- true only while the key was empty,
+which stopped being true the moment one was saved. Hourly would have burned the month's
+allowance in three and a half days.
+
+The split: the hourly task runs `--kind poly`, which is free and is all the forward test
+needs, and a separate twice-daily task does the paid book refresh. The hourly scan still
+prices every outcome, because it re-uses the book quotes the paid scan stored -- matched
+counts and opportunity counts are identical between refreshes. Cost falls from 4,320
+credits a month to 360.

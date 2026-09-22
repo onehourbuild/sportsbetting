@@ -69,7 +69,7 @@ from app.models import (
 from app.services import bets as bets_service
 from app.services import forward, wallet_import
 from app.services.adapters import RESOLVED_LETTER, stored_book_game
-from app.services.prefs import get_prefs
+from app.services.prefs import get_prefs, odds_api_key_for
 from app.settings import Settings, get_settings
 
 log = logging.getLogger(__name__)
@@ -586,6 +586,7 @@ def _scan_league(
                     book=book,
                     fair=fair,
                     prefs_fee_rate=float(_pref(prefs, "taker_fee_rate")),
+                    prefs_use_market_fee=bool(_pref(prefs, "use_market_fee")),
                     now=now,
                 )
             except Exception as exc:  # noqa: BLE001
@@ -838,11 +839,11 @@ def run_scan_default(
             from app.services.demo import DEMO_NOW, build_demo_transport
 
             transport = build_demo_transport(settings)
-            api_key = settings.odds_api_key or DEMO_API_KEY
+            api_key = odds_api_key_for(settings, prefs) or DEMO_API_KEY
             now = now or DEMO_NOW
         else:
             transport = HttpTransport()
-            api_key = settings.odds_api_key
+            api_key = odds_api_key_for(settings, prefs)
             now = now or _utcnow()
         polymarket = PolymarketClient(transport)
         oddsapi = OddsApiClient(transport, api_key) if api_key else None

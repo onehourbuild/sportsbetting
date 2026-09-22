@@ -195,6 +195,21 @@ class StakePlan:
     note: str | None
 
 
+def resolve_fee_rate(market_fee: float | None, prefs: PrefsLike) -> float:
+    """The taker fee to price with: the market's own rate, unless the owner has turned that
+    off, and always the preference when the market does not state one.
+
+    Gamma reports polymarket.com's fee, which is authoritative for anyone trading .com and
+    is why the market value outranks the preference by default. It is wrong for .us, which
+    charges 0.0695 where .com charges 0.10 and publishes no Gamma of its own: there the
+    .com number silently replaced whatever the owner had set and every edge was costed at a
+    fee they never pay. `prefs.use_market_fee` off makes the preference authoritative.
+    """
+    if market_fee is None or not getattr(prefs, "use_market_fee", True):
+        return prefs.taker_fee_rate
+    return market_fee
+
+
 def plan_stake(
     asks: Sequence[BookLevel],
     fair: float,
@@ -296,13 +311,13 @@ def build_opportunity(
 
     None when there is no usable ask, when `fair - effective_price < prefs.min_edge`, or
     when the market reports liquidity below `prefs.min_liquidity_usd` (unknown liquidity
-    passes). The fee is the market's own `taker_fee_rate` when present, else the prefs'.
+    passes). The fee comes from `resolve_fee_rate`.
 
     Also None when the market is not tradable as a pre-game full-game market: closed,
     not accepting orders, or already started (`game_start <= now`). A started game's
     Polymarket price reflects the live score while the book snapshot is pre-game, so the
     difference is not an edge. The scan service skips those markets before pricing; this
-    is defence in depth.
+    is defense in depth.
 
     When the ask ladder cannot absorb the suggested stake, `fill_complete` is False and
     `fill_usd` carries the fee-inclusive dollars the ladder can take at `fill_price`. The
@@ -323,7 +338,7 @@ def build_opportunity(
     if ask is None or ask <= 0.0:
         return None
 
-    fee_rate = market.taker_fee_rate if market.taker_fee_rate is not None else prefs.taker_fee_rate
+    fee_rate = resolve_fee_rate(market.taker_fee_rate, prefs)
     cost = effective_price(ask, fee_rate)
     edge_value = edge(fair.value, cost)
     if edge_value < prefs.min_edge:
@@ -364,7 +379,7 @@ def stake_note(opportunity: Opportunity, book: OrderBook | None, prefs: PrefsLik
     if book is None:
         return None
     market = opportunity.market
-    fee_rate = market.taker_fee_rate if market.taker_fee_rate is not None else prefs.taker_fee_rate
+    fee_rate = resolve_fee_rate(market.taker_fee_rate, prefs)
     plan = plan_stake(
         book.asks, opportunity.fair.value, opportunity.kelly, fee_rate, prefs, market.min_order_size
     )

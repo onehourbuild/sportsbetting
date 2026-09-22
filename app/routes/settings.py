@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
@@ -15,6 +16,7 @@ from app.routes.edges import scan_context
 from app.services import prefs as prefs_service
 from app.templating import templates
 
+log = logging.getLogger(__name__)
 router = APIRouter(tags=["settings"])
 
 FLOAT_FIELDS: tuple[str, ...] = (
@@ -42,6 +44,20 @@ def _num_text(value: Any) -> str:
     return str(value)
 
 
+def mask_key(value: str) -> str:
+    """A key as a hint, never as a value.
+
+    The Settings page is reachable by anyone holding the shared link and the one password,
+    so rendering the key into the form would hand it to every friend who was only invited
+    to look. Four trailing characters are enough for the owner to tell whether the key they
+    are looking at is the one they pasted.
+    """
+    value = (value or "").strip()
+    if not value:
+        return ""
+    return f"set, ending {value[-4:]}" if len(value) > 4 else "set"
+
+
 def prefs_to_values(prefs: Prefs) -> dict[str, Any]:
     """Prefs row -> the strings the form shows."""
     values: dict[str, Any] = {name: _num_text(getattr(prefs, name)) for name in FLOAT_FIELDS}
@@ -54,7 +70,11 @@ def prefs_to_values(prefs: Prefs) -> dict[str, Any]:
     )
     values["leagues_enabled"] = list(prefs.leagues_enabled or [])
     values["espn_fallback_enabled"] = bool(prefs.espn_fallback_enabled)
+    values["use_market_fee"] = bool(prefs.use_market_fee)
     values["pm_wallet"] = prefs.pm_wallet or ""
+    # The stored key never reaches the template; only whether one is set and its last four.
+    values["odds_api_key"] = ""
+    values["odds_api_key_hint"] = mask_key(prefs.odds_api_key or "")
     return values
 
 
@@ -70,7 +90,10 @@ def form_to_values(form: FormData) -> dict[str, Any]:
         str(v).strip().lower() for v in form.getlist("leagues_enabled") if str(v).strip()
     ]
     values["espn_fallback_enabled"] = "espn_fallback_enabled" in form
+    values["use_market_fee"] = "use_market_fee" in form
     values["pm_wallet"] = str(form.get("pm_wallet", "") or "").strip()
+    values["odds_api_key"] = str(form.get("odds_api_key", "") or "").strip()
+    values["odds_api_key_clear"] = "odds_api_key_clear" in form
     return values
 
 
@@ -114,7 +137,15 @@ def values_to_update(values: dict[str, Any]) -> dict[str, Any]:
     data["book_weights"] = parse_book_weights(values.get("book_weights", "") or "")
     data["leagues_enabled"] = list(values.get("leagues_enabled") or [])
     data["espn_fallback_enabled"] = "on" if values.get("espn_fallback_enabled") else "off"
+    data["use_market_fee"] = "on" if values.get("use_market_fee") else "off"
     data["pm_wallet"] = values.get("pm_wallet", "") or ""
+    # A blank key box means "leave the saved key alone", not "delete it" -- otherwise every
+    # unrelated save would silently wipe it, since the box is never prefilled. Clearing is
+    # its own checkbox.
+    if values.get("odds_api_key_clear"):
+        data["odds_api_key"] = ""
+    elif values.get("odds_api_key"):
+        data["odds_api_key"] = values["odds_api_key"]
     return data
 
 
@@ -152,6 +183,11 @@ async def settings_page(request: Request, session: Session = Depends(get_session
 @router.post("/settings", response_class=HTMLResponse)
 async def settings_save(request: Request, session: Session = Depends(get_session)) -> HTMLResponse:
     form = await request.form()
+    # Field NAMES only, never values. A field rendered outside the <form> submits nothing
+    # and fails completely silently -- the save succeeds, the page says "Saved.", and the
+    # missing field is invisible from the server. This line is what makes that case
+    # diagnosable without guessing at the browser.
+    log.info("settings save: fields=%s", sorted(form.keys()))
     values = form_to_values(form)
     try:
         prefs = prefs_service.update_prefs(session, values_to_update(values))

@@ -58,11 +58,14 @@ DEFAULT_PREFS: dict[str, Any] = {
     "book_weights": dict(DEFAULT_BOOK_WEIGHTS),
     "leagues_enabled": list(DEFAULT_LEAGUES),
     "espn_fallback_enabled": True,
+    "use_market_fee": True,
     "match_window_hours": 36.0,
     "min_liquidity_usd": 100.0,
     "stale_book_minutes": 720,
     # Polymarket proxy wallet (0x + 40 hex) whose fills are imported into the ledger; "" = off.
     "pm_wallet": "",
+    # The Odds API key. Env `ODDS_API_KEY` still works and wins; this is the pasteable one.
+    "odds_api_key": "",
 }
 
 
@@ -460,6 +463,16 @@ class Prefs(Base):
         JSON, nullable=False, default=lambda: list(DEFAULT_LEAGUES)
     )
     espn_fallback_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Whether Gamma's per-market `takerBaseFee` outranks `taker_fee_rate` above.
+    # True is right on polymarket.com, where Gamma reports that venue's own fee and the
+    # preference is only a fallback. It is wrong on polymarket.us, which charges a
+    # different coefficient (0.0695 against .com's 0.10) and has no Gamma of its own: there
+    # the .com figure silently overrides whatever the owner set, and every edge is costed
+    # at a fee they do not pay. Off means the preference always wins.
+    use_market_fee: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Set here or in `.env` as ODDS_API_KEY. The env value wins when both are present, so a
+    # deployment cannot be silently repointed by whoever can reach the Settings page.
+    odds_api_key: Mapped[str] = mapped_column(String(64), nullable=False, default="")
     match_window_hours: Mapped[float] = mapped_column(Float, nullable=False, default=36.0)
     min_liquidity_usd: Mapped[float] = mapped_column(Float, nullable=False, default=100.0)
     stale_book_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=720)

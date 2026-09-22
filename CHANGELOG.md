@@ -2,6 +2,89 @@
 
 ## Unreleased — v1 build (2026-09-18)
 
+### The paid scan is its own task (2026-09-21)
+- **The hourly task no longer spends credits.** `forward-scan.cmd` runs `--kind poly`
+  (Polymarket and ESPN, both free); the book refresh moved to `books-scan.cmd` /
+  `books-scan.vbs` and a new **"EdgeFinder books scan"** task at 11:00 and 18:00. A
+  `--kind both` run costs 6 credits against a 500/month free tier, so hourly would have
+  drained it in 3.5 days. Twice daily is 360/month with headroom for manual scans.
+- The hourly poly scan still prices everything -- it reuses the book quotes the paid scan
+  stored, so opportunity counts are unchanged between refreshes.
+- **Every settings save logs the field names it received** (names only, never values), and
+  the server now writes to `data/server.log`. It had no log at all, which is why a field
+  silently missing from a form took three rounds to find.
+
+### Paste the Odds API key into Settings (2026-09-21)
+- **`Prefs.odds_api_key`**: the key can be saved from the Settings page and takes effect on
+  the next scan, instead of requiring a `.env` edit and a restart. `ODDS_API_KEY` in the
+  environment still wins, so a deployment given a key on the command line cannot be
+  repointed by anyone who reaches the Settings page -- this app is shared with a link and
+  one password. `prefs.odds_api_key_for` is the single resolver, used by the scan and by
+  both "has a key" indicators.
+- **The key is never rendered back**, only "set, ending 1234". A blank box means leave the
+  saved key alone (it is never prefilled, so a blank box must not mean delete); removing it
+  is its own checkbox.
+- Malformed keys are rejected at save time rather than at the first request: a bad key does
+  not raise, it silently falls back to ESPN, which looks exactly like having no key.
+- 7 new tests -- and then an 8th, after the field shipped **outside the `<form>`**. It
+  rendered, accepted a pasted key and dropped it on submit with no error anywhere; the
+  other settings saved normally, so `updated_at` moved and nothing looked wrong. The
+  handler tests could not see it because they post to the endpoint rather than through the
+  page. `test_every_settings_input_is_inside_the_settings_form` reads the rendered HTML and
+  asserts every input the handler consumes falls inside the form element; it was confirmed
+  to fail against the broken layout before being kept.
+
+### The fee preference can outrank Gamma (2026-09-21)
+- **`Prefs.use_market_fee`** (Settings, default on). Gamma reports polymarket.com's
+  per-market `takerBaseFee` and the app took it over the preference, which is right on
+  .com and wrong on .us: .us charges 0.0695 where Gamma says 0.10, publishes no Gamma of
+  its own, and the owner trades .us -- so the rate they set was being silently replaced and
+  every edge costed at a fee they never pay. Turning it off makes the preference
+  authoritative. `edge.resolve_fee_rate` is now the single place that decides, used by
+  `build_opportunity`, `stake_note_for` and `forward.record_sample`.
+- Measured: at the corrected rate the live slate went from 7 candidates to 25 and the best
+  edge from -0.79% to -0.17%. None became positive.
+- **`min_edge` now accepts a negative threshold** (floor -0.25). With one book nothing on a
+  live slate clears zero, so a floor of 0 meant the Edges page could only ever be empty and
+  "show me the closest ones anyway" could not be asked for. Kelly clamps a negative edge to
+  a $0 stake, so these list without being sized.
+- 6 new tests.
+
+### American spelling throughout (2026-09-21)
+- 24 files: `favourite` (including the rule labels and `_favorite`), `artefact`,
+  `behaviour`, `colour`, `recognised`, `labelled`, `defence`, `normalised`.
+
+### Strategy bake-off (2026-09-21)
+- **28 betting rules scored over the same 6,302 resolved outcomes**
+  (`app/services/strategies.py`, `python -m app.cli strategy-bakeoff`). A rule is any
+  function of what was knowable before kickoff -- price, league, market type, side,
+  liquidity, freshness -- and none may see the result, which is pinned by a test that flips
+  every result and asserts no rule's picks move. Each rule reports picks, win rate, what
+  its own prices implied, return per dollar net of the taker fee, and a p value.
+- **Two guards against finding a winner that is not there.** Testing 28 rules at p < 0.05
+  is expected to produce one winner by luck, so the table is scored against a permutation
+  null: results shuffled inside 2c price bands, which keeps the market exactly as
+  calibrated as it was and destroys everything else. And every league's history is cut at
+  its own median kickoff, rules ranked on the early half, then re-scored unchanged on the
+  late half.
+- `--csv DIR` writes `bakeoff-summary.csv` (a line per rule) and `bakeoff-picks.csv` (a line
+  per bet: question, side, price, cost with fee, result, return, and which rules bought it),
+  with a test asserting the per-bet returns sum to the summary's total.
+- `backtest._normal_cdf` and `backtest._paired_only` are now public; the bake-off needs the
+  same pairing filter and the same normal tail.
+- 17 new tests (`tests/test_strategies.py`).
+
+### Forward report counts bets, not rows (2026-09-21)
+- **A bet is an outcome, not a scan.** `forward.report` counted every stored sample as a
+  separate bet, but the hourly scan re-records the same outcome for as long as it stays
+  priceable. On three days of live data that turned one winning outcome seen eleven times
+  into "+47% ROI on 13 bets". `forward._one_bet_per_token` now keeps one row per token —
+  the first scan at which it cleared the threshold, which is when you would have bought —
+  so the same three days read 3 bets, and 0 at the app's own 2% threshold. The report
+  prints graded outcomes and the row count behind them separately.
+- 2 new tests (`tests/test_forward.py`) rebuild the exact eleven-copies shape and pin which
+  copy is priced.
+
 ### Polymarket US found (2026-09-21)
 - `docs/STATUS-2026-09-21.md`: the owner's funded account is on **polymarket.us**, a
   separate US-regulated exchange with no wallets, so the wallet importer cannot see their
@@ -62,7 +145,7 @@
   page loads fail with "database is locked" (observed while harvesting).
 
 ### Live-API fixes (2026-09-18, first run against the real APIs)
-- **ESPN 403 on every request.** `site.api.espn.com` allowlists recognised HTTP-client
+- **ESPN 403 on every request.** `site.api.espn.com` allowlists recognized HTTP-client
   User-Agents; `polymarket-edge-finder/0.1` was refused, `curl`/`python-httpx`/
   `python-requests`/`okhttp`/`Go-http-client` were served. `transport.USER_AGENT` now leads
   with the real httpx token and keeps the app name after it.

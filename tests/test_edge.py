@@ -12,6 +12,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+import app.core.edge as edge_mod
 from app.core.edge import (
     DEFAULT_TICK,
     NOTE_EDGE_CAPPED,
@@ -58,6 +59,7 @@ class Prefs:
     min_edge: float = 0.02
     taker_fee_rate: float = 0.05
     min_liquidity_usd: float = 100.0
+    use_market_fee: bool = True
 
 
 def _levels(*pairs: tuple[float, float]) -> tuple[BookLevel, ...]:
@@ -811,3 +813,46 @@ class TestMinimumOrderSize:
         assert opp is not None
         assert opp.suggested_stake == 0.0
         assert stake_note(opp, book, Prefs()) is not None
+
+
+class TestResolveFeeRate:
+    """Which fee an outcome is priced at. Getting this wrong does not fail loudly -- it
+    quietly moves every edge in the app by half a point or more."""
+
+    def test_the_market_rate_wins_by_default(self) -> None:
+        assert edge_mod.resolve_fee_rate(0.10, Prefs(taker_fee_rate=0.0695)) == 0.10
+
+    def test_the_preference_wins_when_the_owner_turns_the_market_rate_off(self) -> None:
+        """polymarket.us charges 0.0695 and publishes no Gamma; the 0.10 that Gamma reports
+        is .com's fee and must not silently replace what the owner set."""
+        prefs = Prefs(taker_fee_rate=0.0695, use_market_fee=False)
+        assert edge_mod.resolve_fee_rate(0.10, prefs) == 0.0695
+
+    def test_the_preference_is_used_when_the_market_states_no_rate(self) -> None:
+        for flag in (True, False):
+            prefs = Prefs(taker_fee_rate=0.0695, use_market_fee=flag)
+            assert edge_mod.resolve_fee_rate(None, prefs) == 0.0695
+
+    def test_turning_it_off_changes_the_edge_an_opportunity_reports(self) -> None:
+        """The end-to-end consequence: at 72c the two fee rates differ by 0.6 points of
+        edge, which is the difference between showing a bet and hiding it."""
+        book = make_book(_levels((0.72, 5000.0)))
+        market = make_market(taker_fee_rate=0.10)
+        fair = make_fair(0.732)
+
+        on = build_opportunity(
+            market, 0, book, fair, Prefs(taker_fee_rate=0.0695, min_edge=-0.25), None, NOW
+        )
+        off = build_opportunity(
+            market,
+            0,
+            book,
+            fair,
+            Prefs(taker_fee_rate=0.0695, min_edge=-0.25, use_market_fee=False),
+            None,
+            NOW,
+        )
+        assert on is not None and off is not None
+        assert on.effective_price == pytest.approx(0.72 + 0.10 * 0.72 * 0.28)
+        assert off.effective_price == pytest.approx(0.72 + 0.0695 * 0.72 * 0.28)
+        assert off.edge - on.edge == pytest.approx((0.10 - 0.0695) * 0.72 * 0.28)

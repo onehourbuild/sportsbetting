@@ -25,6 +25,7 @@ from app.db import get_session
 from app.models import Game, Market, Opportunity, Prefs, Scan
 from app.services import prefs as prefs_service
 from app.services import scan as scan_service
+from app.services.prefs import get_prefs, odds_api_key_for
 from app.settings import Settings, get_settings
 from app.templating import templates
 
@@ -281,7 +282,7 @@ def scan_context(
         "last_scan": latest_scan(session),
         "quota": safe_quota_status(session),
         "books_cost": safe_books_cost(prefs),
-        "has_odds_key": bool(settings.odds_api_key),
+        "has_odds_key": bool(odds_api_key_for(settings, get_prefs(session))),
         "demo_mode": bool(settings.demo_mode),
         "now": now if now is not None else datetime.now(UTC),
     }

@@ -6,7 +6,12 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.models import DEFAULT_BOOK_WEIGHTS, DEFAULT_BOOKMAKERS, Prefs
-from app.services.prefs import get_prefs, update_prefs, validate_prefs
+from app.services.prefs import (
+    get_prefs,
+    odds_api_key_for,
+    update_prefs,
+    validate_prefs,
+)
 
 
 def test_get_prefs_creates_singleton_with_defaults(db_session: Session) -> None:
@@ -42,7 +47,7 @@ def test_get_prefs_creates_singleton_with_defaults(db_session: Session) -> None:
         ({"kelly_fraction": 1.5}, "kelly_fraction"),
         ({"max_stake_pct": 0}, "max_stake_pct"),
         ({"max_stake_pct": 101}, "max_stake_pct"),
-        ({"min_edge": -0.01}, "min_edge"),
+        ({"min_edge": -0.26}, "min_edge"),
         ({"min_edge": 0.5}, "min_edge"),
         ({"taker_fee_rate": 0.2}, "taker_fee_rate"),
         ({"taker_fee_rate": -0.1}, "taker_fee_rate"),
@@ -231,3 +236,47 @@ def test_leagues_enabled_must_keep_at_least_one_league(db_session: Session) -> N
     with pytest.raises(ValueError, match="at least one league"):
         update_prefs(db_session, {"leagues_enabled": []})
     assert get_prefs(db_session).leagues_enabled == ["nfl", "nba", "mlb"]
+
+
+def test_a_negative_min_edge_is_allowed_so_the_page_can_show_the_best_available(
+    db_session: Session,
+) -> None:
+    """With one book nothing on a live slate clears 0, so a floor of 0 makes the Edges page
+    permanently empty and there is no way to ask "show me the closest ones anyway". The
+    stake is Kelly's problem, and Kelly clamps a negative edge to zero regardless."""
+    updated = update_prefs(db_session, {"min_edge": -0.02})
+    assert updated.min_edge == -0.02
+
+
+class TestOddsApiKeyResolution:
+    """Which key wins. Getting this backwards would let anyone holding the shared link
+    repoint a deployment that was given a key on the command line."""
+
+    class _Settings:
+        def __init__(self, value: str) -> None:
+            self.odds_api_key = value
+
+        def odds_api_key_value(self) -> str:
+            return self.odds_api_key
+
+    class _Prefs:
+        def __init__(self, value: str) -> None:
+            self.odds_api_key = value
+
+    def test_env_beats_the_saved_preference(self) -> None:
+        assert odds_api_key_for(self._Settings("envkey"), self._Prefs("prefkey")) == "envkey"
+
+    def test_the_preference_is_used_when_env_is_empty(self) -> None:
+        assert odds_api_key_for(self._Settings(""), self._Prefs("prefkey")) == "prefkey"
+
+    def test_neither_gives_empty_so_the_app_falls_back_to_espn(self) -> None:
+        assert odds_api_key_for(self._Settings("  "), self._Prefs("")) == ""
+
+
+def test_an_api_key_is_stripped_and_checked(db_session: Session) -> None:
+    good = "  abc123def456abc123def456abc12345  "
+    assert update_prefs(db_session, {"odds_api_key": good}).odds_api_key == good.strip()
+    assert update_prefs(db_session, {"odds_api_key": ""}).odds_api_key == ""
+    for bad in ("short", "https://api.the-odds-api.com/v4?apiKey=abc", "your key is: abc123"):
+        with pytest.raises(ValueError, match="odds_api_key"):
+            update_prefs(db_session, {"odds_api_key": bad})

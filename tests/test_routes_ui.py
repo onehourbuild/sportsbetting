@@ -1109,3 +1109,79 @@ def test_games_list_requires_login(anon_client) -> None:
 def test_edges_empty_state_links_to_the_games_list(client, db_session) -> None:
     _seed_games(db_session)
     assert 'href="/games' in client.get("/").text
+
+
+def test_the_odds_key_is_saved_from_settings_and_never_rendered_back(
+    client: TestClient, db_session
+):
+    """The page is reachable by anyone with the shared link and the one password, so the
+    key must go in and never come back out. Only its last four characters are shown."""
+    form = dict(SETTINGS_FORM)
+    form["odds_api_key"] = "abc123def456abc123def456abc12345"
+    response = client.post("/settings", data=form)
+    assert response.status_code == 200
+    db_session.expire_all()
+    assert prefs_service.get_prefs(db_session).odds_api_key == form["odds_api_key"]
+
+    page = client.get("/settings")
+    assert form["odds_api_key"] not in page.text
+    assert "set, ending 2345" in page.text
+
+
+def test_saving_other_settings_does_not_wipe_the_odds_key(client: TestClient, db_session):
+    """The key box is never prefilled, so a blank box has to mean "leave it alone" -- or
+    every unrelated save would silently delete the key and the app would quietly drop back
+    to ESPN with no sign anything changed."""
+    key = "abc123def456abc123def456abc12345"
+    client.post("/settings", data={**SETTINGS_FORM, "odds_api_key": key})
+    client.post("/settings", data=SETTINGS_FORM)  # blank key box
+    db_session.expire_all()
+    assert prefs_service.get_prefs(db_session).odds_api_key == key
+
+    client.post("/settings", data={**SETTINGS_FORM, "odds_api_key_clear": "on"})
+    db_session.expire_all()
+    assert prefs_service.get_prefs(db_session).odds_api_key == ""
+
+
+def test_a_pasted_url_is_rejected_rather_than_saved_as_a_key(client: TestClient, db_session):
+    """A bad key does not raise at request time -- it just makes every book refresh fall
+    back to ESPN, which looks identical to having no key at all."""
+    bad = dict(SETTINGS_FORM)
+    bad["odds_api_key"] = "https://api.the-odds-api.com/v4/?apiKey=abc123"
+    response = client.post("/settings", data=bad)
+    assert response.status_code == 200
+    assert "odds_api_key must be" in response.text
+    db_session.expire_all()
+    assert prefs_service.get_prefs(db_session).odds_api_key == ""
+
+
+def test_every_settings_input_is_inside_the_settings_form(client: TestClient):
+    """The guard that was missing. A field rendered outside <form> looks entirely normal,
+    accepts what you type and is dropped on submit with no error anywhere -- the Odds API
+    key field shipped exactly that way. The handler test could not catch it, because it
+    posts to the endpoint instead of through the page, so this one reads the HTML."""
+    client.post("/settings", data={**SETTINGS_FORM, "odds_api_key": "a" * 32})
+    html = client.get("/settings").text
+
+    start = html.index('<form method="post" action="/settings"')
+    form_html = html[start : html.index("</form>", start)]
+    for name in (
+        "bankroll",
+        "kelly_fraction",
+        "max_stake_pct",
+        "min_edge",
+        "taker_fee_rate",
+        "devig_method",
+        "bookmakers",
+        "book_weights",
+        "leagues_enabled",
+        "espn_fallback_enabled",
+        "use_market_fee",
+        "match_window_hours",
+        "min_liquidity_usd",
+        "stale_book_minutes",
+        "pm_wallet",
+        "odds_api_key",
+        "odds_api_key_clear",
+    ):
+        assert f'name="{name}"' in form_html, f"{name} is rendered outside the settings form"

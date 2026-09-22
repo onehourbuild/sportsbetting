@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.db import get_session
 from app.models import Bet, BookQuote, Game, Market, Opportunity, PmQuote, Scan
 from app.routes.edges import app_settings, safe_quota_status
+from app.services.prefs import get_prefs, odds_api_key_for
 from app.templating import templates
 
 router = APIRouter(tags=["diagnostics"])
@@ -108,7 +109,7 @@ async def diagnostics_page(
             "book_quotes": _count(session, BookQuote),
         },
         "quota": safe_quota_status(session),
-        "has_odds_key": bool(settings.odds_api_key),
+        "has_odds_key": bool(odds_api_key_for(settings, get_prefs(session))),
         "demo_mode": bool(settings.demo_mode),
         "app_env": settings.app_env,
         "scheduler_poly_minutes": settings.scheduler_poly_minutes,
